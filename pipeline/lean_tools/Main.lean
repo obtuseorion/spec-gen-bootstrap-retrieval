@@ -3,6 +3,7 @@ import LeanTools.Graph
 import LeanTools.SpecForm
 import LeanTools.Mutate
 import LeanTools.Gate
+import LeanTools.ProofCheck
 /-!
 `lake exe leantools <cmd> --project <root> [--namespace Corpus] <cmd args…>`
 
@@ -45,6 +46,14 @@ unsafe def main (argv : List String) : IO UInt32 := do
           let seed := (args["seed"]?.bind String.toNat?).getD 0
           let chunk := (args["chunk"]?.bind String.toNat?).getD 16
           Gate.run p unit.toName members spec runs max timeout seed chunk
+        | "proofcheck" => do
+          let some unit := args["unit"]? | throw <| IO.userError "missing --unit"
+          let some spec := args["spec"]? | throw <| IO.userError "missing --spec"
+          let some proof := args["proof"]? | throw <| IO.userError "missing --proof"
+          let callee := args.getD "callee-specs" "."
+          let members := args["members"]?.map fun s => (s.splitOn ",").toArray.map String.toName
+          let typesModule := args["types-module"]?.map String.toName
+          ProofCheck.run p unit.toName members spec proof callee typesModule
         | other => throw <| IO.userError s!"unknown command {other}\n{usage}"
       emit out
       -- Runaway evaluation tasks (mutants that diverge) would keep the runtime from

@@ -1,0 +1,15 @@
+{
+  "a_clean":         {"unit": "Corpus.demo.use_mul2_add1", "callee_specs": "callee_specs",
+                      "expect": {"kernel_ok": true, "axioms_ok": true, "static_ok": true, "opaque_ok": true, "blame": null}},
+  "b_simp_callee":   {"unit": "Corpus.demo.use_mul2_add1", "callee_specs": "callee_specs",
+                      "expect": {"kernel_ok": true, "axioms_ok": true, "static_ok": false},
+                      "static_violation_prefix": "Corpus.demo.mul2_add1"},
+  "c_rfl_callee":    {"unit": "Corpus.adt_borrows.use_array_mut_borrow1", "callee_specs": "callee_specs",
+                      "expect": {"kernel_ok": true, "axioms_ok": true, "static_ok": true, "opaque_ok": false}},
+  "d_native_decide": {"unit": "Corpus.demo.mul2_add1", "callee_specs": "callee_specs",
+                      "expect": {"kernel_ok": true, "axioms_ok": false}},
+  "e_own_loop":      {"unit": "Corpus.loops_adts.array_shared_borrow_loop1", "callee_specs": "callee_specs",
+                      "expect": {"kernel_ok": true, "axioms_ok": true, "static_ok": true, "opaque_ok": true}},
+  "f_weak_callee":   {"unit": "Corpus.demo.use_mul2_add1", "callee_specs": "weak_callee_specs",
+                      "expect": {"kernel_ok": false, "blame": "Corpus.demo.mul2_add1"}}
+}
