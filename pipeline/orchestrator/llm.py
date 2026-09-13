@@ -66,8 +66,15 @@ class AnthropicLLM:
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",
         )
-        with self._client.beta.messages.stream(**kwargs) as stream:
-            message = stream.get_final_message()
+        try:
+            with self._client.beta.messages.stream(**kwargs) as stream:
+                message = stream.get_final_message()
+        except TypeError:
+            # SDK without the server-side fallback parameter: plain request
+            kwargs.pop("betas", None)
+            kwargs.pop("fallbacks", None)
+            with self._client.messages.stream(**kwargs) as stream:
+                message = stream.get_final_message()
         text = "".join(block.text for block in message.content if block.type == "text")
         usage = Usage(input_tokens=message.usage.input_tokens, output_tokens=message.usage.output_tokens,
                       calls=1, elapsed_s=round(time.monotonic() - t0, 3))

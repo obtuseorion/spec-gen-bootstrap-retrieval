@@ -1,0 +1,2 @@
+unfold adt_borrows.array_shared_borrow
+simp

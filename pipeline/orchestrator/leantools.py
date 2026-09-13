@@ -31,6 +31,8 @@ class LeanTools:
         for k, v in kwargs.items():
             if v is None:
                 continue
+            if isinstance(v, Path):
+                v = v.resolve()
             argv += [f"--{k.replace('_', '-')}", str(v)]
         return argv
 

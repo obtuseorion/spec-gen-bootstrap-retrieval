@@ -25,6 +25,7 @@ packages = ["pipeline/orchestrator"]
 addopts = "-ra"
 pythonpath = ["pipeline"]
 testpaths = ["tests/python"]
+markers = ["slow: end-to-end runs that invoke leantools many times"]
 
 [tool.ruff]
 line-length = 100
