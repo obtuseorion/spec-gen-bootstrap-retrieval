@@ -9,3 +9,4 @@ import LeanTools.Mutate
 import LeanTools.Eval
 import LeanTools.Gate
 import LeanTools.ProofCheck
+import LeanTools.EmbedText

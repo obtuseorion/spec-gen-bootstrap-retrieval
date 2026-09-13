@@ -4,6 +4,7 @@ import LeanTools.SpecForm
 import LeanTools.Mutate
 import LeanTools.Gate
 import LeanTools.ProofCheck
+import LeanTools.EmbedText
 /-!
 `lake exe leantools <cmd> --project <root> [--namespace Corpus] <cmd args…>`
 
@@ -54,6 +55,10 @@ unsafe def main (argv : List String) : IO UInt32 := do
           let members := args["members"]?.map fun s => (s.splitOn ",").toArray.map String.toName
           let typesModule := args["types-module"]?.map String.toName
           ProofCheck.run p unit.toName members spec proof callee typesModule
+        | "embedtext" => do
+          let some unit := args["unit"]? | throw <| IO.userError "missing --unit"
+          let members := args["members"]?.map fun s => (s.splitOn ",").toArray.map String.toName
+          EmbedText.run p unit.toName members
         | other => throw <| IO.userError s!"unknown command {other}\n{usage}"
       emit out
       -- Runaway evaluation tasks (mutants that diverge) would keep the runtime from
