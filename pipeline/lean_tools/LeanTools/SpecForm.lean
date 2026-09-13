@@ -30,8 +30,10 @@ structure Result where
   vocab_violations : Array String := #[]
   decidable_ok : Bool := false
   undecidable : Array String := #[]
-  spec_prop : String := ""
+  spec_prop : String := ""          -- `∀ <binders>, <conclusion>` built from the theorem syntax
+  spec_prop_pp : String := ""       -- the elaborated statement, pretty-printed (informational)
   spec_prop_reelab_ok : Bool := false
+  spec_prop_reelab_error : String := ""
   theorem_name : String := ""
   target : String := ""
   binders : Array String := #[]     -- explicit binder names in order, for sampling
@@ -161,12 +163,21 @@ def run (p : Project) (unit : Name) (members? : Option (Array Name)) (specFile :
     res := { res with undecidable := undec, decidable_ok := undec.isEmpty }
     -- closed Prop (the statement itself), pretty-printed
     let pp ← withOptions (fun o => ((pp.funBinderTypes.set o true) |> (pp.coercions.set · false)) |> (pp.proofs.set · true)) do ppExpr type
-    res := { res with spec_prop := toString pp }
+    res := { res with spec_prop_pp := toString pp }
     return res)
   res := res'
-  -- does the pretty-printed Prop re-elaborate?
-  let re ← elabCommands r.env (specHeader p.ns ++ s!"example : {res.spec_prop} := by sorry\n") "<spec_prop>"
-  res := { res with spec_prop_reelab_ok := re.errors.isEmpty }
+  -- closed Prop from the theorem's own syntax: `∀ <binders>, <conclusion>`
+  let thmStx := (thms[0]!)[1]
+  let bindersStx := thmStx[2][0]
+  let typeStx := thmStx[2][1][1]
+  let bindersTxt := (bindersStx.reprint.getD "").trimAscii.toString
+  let typeTxt := (typeStx.reprint.getD "").trimAscii.toString
+  let prop := if bindersTxt.isEmpty then typeTxt else s!"∀ {bindersTxt}, {typeTxt}"
+  res := { res with spec_prop := prop }
+  -- does it re-elaborate (in the environment that elaborated the spec)?
+  let re ← elabCommands r.env (specHeader p.ns ++ s!"example : {prop} := by sorry\n") "<spec_prop>"
+  res := { res with spec_prop_reelab_ok := re.errors.isEmpty,
+                    spec_prop_reelab_error := String.intercalate "\n" re.errors.toList }
   return toJson res
 
 end LeanTools.SpecForm

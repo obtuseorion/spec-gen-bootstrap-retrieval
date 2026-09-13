@@ -37,8 +37,10 @@ instance decEqArray {α : Type u} {n : Usize} [DecidableEq α] : DecidableEq (Ar
 instance decEqSlice {α : Type u} [DecidableEq α] : DecidableEq (Slice α) :=
   fun a b => decidable_of_iff (a.val = b.val) Subtype.ext_iff.symm
 
-instance decEqVec {α : Type u} [DecidableEq α] : DecidableEq (Vec α) :=
+instance decEqVec {α : Type u} [DecidableEq α] : DecidableEq (alloc.vec.Vec α) :=
   fun a b => decidable_of_iff (a.val = b.val) Subtype.ext_iff.symm
+
+deriving instance DecidableEq for Error
 
 instance decEqResult {α : Type u} [DecidableEq α] : DecidableEq (Result α) :=
   fun a b =>
