@@ -1,6 +1,7 @@
 import LeanTools.Common
 import LeanTools.Graph
 import LeanTools.SpecForm
+import LeanTools.Mutate
 /-!
 `lake exe leantools <cmd> --project <root> [--namespace Corpus] <cmd args…>`
 
@@ -27,6 +28,12 @@ unsafe def main (argv : List String) : IO UInt32 := do
           let some spec := args["spec"]? | throw <| IO.userError "missing --spec"
           let members := args["members"]?.map fun s => (s.splitOn ",").toArray.map String.toName
           SpecForm.run p unit.toName members spec
+        | "mutate" => do
+          let some unit := args["unit"]? | throw <| IO.userError "missing --unit"
+          let members := args["members"]?.map fun s => (s.splitOn ",").toArray.map String.toName
+          let max := (args["max-mutants"]?.bind String.toNat?).getD 200
+          let seed := (args["seed"]?.bind String.toNat?).getD 0
+          Mutate.run p unit.toName members max seed
         | other => throw <| IO.userError s!"unknown command {other}\n{usage}"
       emit out
       return (0 : UInt32)
