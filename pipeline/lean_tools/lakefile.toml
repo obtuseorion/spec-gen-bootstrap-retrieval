@@ -1,0 +1,17 @@
+name = "leantools"
+defaultTargets = ["leantools"]
+
+# The emitted project (scripts/check.sh output). Its transitive dependencies
+# (Aeneas Lean backend, Mathlib, Plausible, …) are resolved through the shared
+# packages checkout symlinked at .lake/packages.
+[[require]]
+name = "corpus"
+path = "../../corpus/lean"
+
+[[lean_lib]]
+name = "LeanTools"
+
+[[lean_exe]]
+name = "leantools"
+root = "Main"
+supportInterpreter = true

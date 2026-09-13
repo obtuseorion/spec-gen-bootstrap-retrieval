@@ -1,0 +1,20 @@
+{
+  "good_exact_bool_lt":            {"unit": "Corpus.bool_cmp.lt",
+    "expect": {"error": null, "shape_ok": true, "shape": "exact", "attr_ok": true, "vocab_ok": true, "decidable_ok": true}},
+  "good_exact_array_shared_borrow": {"unit": "Corpus.adt_borrows.array_shared_borrow",
+    "expect": {"error": null, "shape_ok": true, "shape": "exact", "attr_ok": true, "vocab_ok": true, "decidable_ok": true}},
+  "good_post_incr":                {"unit": "Corpus.demo.incr",
+    "expect": {"error": null, "shape_ok": true, "shape": "post", "attr_ok": true, "vocab_ok": true, "decidable_ok": true}},
+  "good_post_mul2_add1":           {"unit": "Corpus.demo.mul2_add1",
+    "expect": {"error": null, "shape_ok": true, "shape": "post", "attr_ok": true, "vocab_ok": true, "decidable_ok": true}},
+  "bad_shape_dspec":               {"unit": "Corpus.demo.incr",
+    "expect": {"error": null, "shape_ok": false, "vocab_ok": true}},
+  "bad_vocab_new_def":             {"unit": "Corpus.demo.incr",
+    "expect": {"error": null, "shape_ok": true, "vocab_ok": false, "vocab_violations": ["extra declaration: definition"]}},
+  "bad_vocab_crate_const":         {"unit": "Corpus.demo.use_mul2_add1",
+    "expect": {"error": null, "shape_ok": true, "vocab_ok": false, "vocab_violations": ["Corpus.demo.mul2_add1"]}},
+  "bad_undecidable":               {"unit": "Corpus.demo.incr",
+    "expect": {"error": null, "shape_ok": true, "vocab_ok": true, "decidable_ok": false}},
+  "good_loop_helper":              {"unit": "Corpus.loops_adts.array_shared_borrow_loop1",
+    "expect": {"error": null, "shape_ok": true, "shape": "post", "attr_ok": true, "vocab_ok": true, "decidable_ok": true}}
+}

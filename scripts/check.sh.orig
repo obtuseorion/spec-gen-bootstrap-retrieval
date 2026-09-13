@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# check.sh — the single oracle for "does this crate translate through Aeneas".
+#
+# Usage: scripts/check.sh <crate-dir>
+#
+# Stages (each prints a line; the first failing stage sets the exit code):
+#   1. cargo build            (exit 10)
+#   2. charon cargo --preset=aeneas   → <crate>.llbc         (exit 20)
+#   3. aeneas -backend lean -split-files → Lean sources      (exit 30)
+#   4. no-holes gate: *External_Template.lean must not declare axioms (exit 40)
+#   5. lake build of the generated Lean package              (exit 50)
+#
+# Environment (all optional):
+#   AENEAS_REPO   path to a checkout of AeneasVerif/aeneas  (default: ./aeneas)
+#   CHARON_BIN    charon binary (default: charon on PATH, else $AENEAS_REPO/charon/bin/charon)
+#   AENEAS_BIN    aeneas binary (default: aeneas on PATH, else $AENEAS_REPO/bin/aeneas)
+#   LAKE_TIMEOUT  seconds for lake build (default 1800)
+#   OUT_DIR       where the generated Lean package goes (default: <crate>/lean-out)
+#
+# The crate may contain a file AENEAS_FLAGS with extra aeneas flags, one per line.
+#
+# NOTE TO THE AGENT: flag names, the .llbc location, and the template format
+# are the parts most likely to differ across Aeneas versions. Verify against
+# `charon --help` / `aeneas --help` in Phase 0 and fix this script if needed.
+
+set -uo pipefail
+
+CRATE="${1:?usage: check.sh <crate-dir>}"
+CRATE="$(cd "$CRATE" && pwd)"
+CRATE_NAME="$(basename "$CRATE")"
+AENEAS_REPO="${AENEAS_REPO:-$(pwd)/aeneas}"
+CHARON_BIN="${CHARON_BIN:-$(command -v charon || echo "$AENEAS_REPO/charon/bin/charon")}"
+AENEAS_BIN="${AENEAS_BIN:-$(command -v aeneas || echo "$AENEAS_REPO/bin/aeneas")}"
+LAKE_TIMEOUT="${LAKE_TIMEOUT:-1800}"
+OUT_DIR="${OUT_DIR:-$CRATE/lean-out}"
+LOG_DIR="$CRATE/check-logs"
+mkdir -p "$LOG_DIR"
+
+stage() { printf '\n== [%s] %s\n' "$1" "$2"; }
+fail()  { printf '\n!! FAILED at stage %s (exit %s). Log: %s\n' "$1" "$2" "$3"; exit "$2"; }
+
+# ---------------------------------------------------------------- 1. cargo
+stage 1 "cargo build"
+( cd "$CRATE" && cargo build 2>&1 ) | tee "$LOG_DIR/1-cargo.log"
+[ "${PIPESTATUS[0]}" -eq 0 ] || fail cargo 10 "$LOG_DIR/1-cargo.log"
+
+# ---------------------------------------------------------------- 2. charon
+stage 2 "charon cargo --preset=aeneas"
+rm -f "$CRATE"/*.llbc
+( cd "$CRATE" && "$CHARON_BIN" cargo --preset=aeneas 2>&1 ) | tee "$LOG_DIR/2-charon.log"
+[ "${PIPESTATUS[0]}" -eq 0 ] || fail charon 20 "$LOG_DIR/2-charon.log"
+
+# Charon writes <crate_name>.llbc into the crate dir by default (verify!).
+LLBC="$(ls "$CRATE"/*.llbc 2>/dev/null | head -n1)"
+[ -n "$LLBC" ] || { echo "no .llbc produced in $CRATE (check charon's --dest / output location)"; fail charon 20 "$LOG_DIR/2-charon.log"; }
+echo "llbc: $LLBC"
+
+# ---------------------------------------------------------------- 3. aeneas
+stage 3 "aeneas -backend lean -split-files"
+rm -rf "$OUT_DIR"
+mkdir -p "$OUT_DIR"
+
+EXTRA_FLAGS=()
+if [ -f "$CRATE/AENEAS_FLAGS" ]; then
+  while IFS= read -r line; do
+    [ -n "$line" ] && [ "${line:0:1}" != "#" ] && EXTRA_FLAGS+=("$line")
+  done < "$CRATE/AENEAS_FLAGS"
+fi
+
+"$AENEAS_BIN" -backend lean -split-files -dest "$OUT_DIR" "${EXTRA_FLAGS[@]}" "$LLBC" 2>&1 \
+  | tee "$LOG_DIR/3-aeneas.log"
+[ "${PIPESTATUS[0]}" -eq 0 ] || fail aeneas 30 "$LOG_DIR/3-aeneas.log"
+
+# ---------------------------------------------------------------- 4. holes
+stage 4 "no-holes gate on *External_Template.lean"
+# Aeneas lists missing external definitions in the template files as axioms
+# (verify the exact form in Phase 0 and adjust the grep).
+HOLES="$(grep -rn -E '^\s*(axiom|sorry)\b|\bsorry\b' "$OUT_DIR" --include='*External_Template.lean' 2>/dev/null || true)"
+if [ -n "$HOLES" ]; then
+  echo "$HOLES" | tee "$LOG_DIR/4-holes.log"
+  echo "Missing external models — drop the offending Rust, do not write models."
+  fail holes 40 "$LOG_DIR/4-holes.log"
+fi
+echo "no holes"
+
+# ---------------------------------------------------------------- 5. lake
+stage 5 "lake build"
+# Generated files import the Aeneas Lean package. Set up a lake project around
+# them once; keep it if it already exists so builds are cached.
+if [ ! -f "$OUT_DIR/lakefile.toml" ]; then
+  cp "$AENEAS_REPO/backends/lean/lean-toolchain" "$OUT_DIR/lean-toolchain"
+  cat > "$OUT_DIR/lakefile.toml" <<EOF
+name = "${CRATE_NAME}"
+defaultTargets = ["${CRATE_NAME^}"]
+
+[[require]]
+name = "aeneas"
+path = "${AENEAS_REPO}/backends/lean"
+
+[[lean_lib]]
+name = "${CRATE_NAME^}"
+EOF
+  echo "wrote $OUT_DIR/lakefile.toml — check that the lean_lib name matches the"
+  echo "top-level module Aeneas generated (it uses the crate name, capitalized)."
+fi
+
+( cd "$OUT_DIR" && timeout "$LAKE_TIMEOUT" lake build 2>&1 ) | tee "$LOG_DIR/5-lake.log"
+rc="${PIPESTATUS[0]}"
+[ "$rc" -eq 124 ] && { echo "lake build timed out after ${LAKE_TIMEOUT}s"; fail lake 50 "$LOG_DIR/5-lake.log"; }
+[ "$rc" -eq 0 ] || fail lake 50 "$LOG_DIR/5-lake.log"
+
+printf '\n== OK: %s translates and builds. Lean output in %s\n' "$CRATE_NAME" "$OUT_DIR"
+exit 0

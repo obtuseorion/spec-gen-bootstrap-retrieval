@@ -1,0 +1,11 @@
+name = "corpus"
+defaultTargets = ["Corpus"]
+
+[[require]]
+name = "aeneas"
+git = "https://github.com/AeneasVerif/aeneas"
+subDir = "backends/lean"
+rev = "5d08da45a405913bbee6fd544e01debf8154ac9d"
+
+[[lean_lib]]
+name = "Corpus"

@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+corpus/target/
+corpus/*.llbc
+corpus/check-logs/
+corpus/lean/.lake/
+pipeline/lean_tools/.lake/
+corpus_store/
+runs/
+.DS_Store

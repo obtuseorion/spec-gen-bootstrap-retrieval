@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "spec-gen-bootstrap-retrieval"
+version = "0.1.0"
+description = "Bootstrapped few-shot spec/proof generation for Aeneas-translated Rust (orchestrator)."
+requires-python = ">=3.12"
+dependencies = [
+  "numpy>=2.0",
+  "anthropic>=0.71",
+]
+
+[project.optional-dependencies]
+embed = ["sentence-transformers>=4.1", "torch>=2.4"]
+
+[dependency-groups]
+dev = ["pytest>=8.4", "ruff>=0.12", "mypy>=1.17"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["pipeline/orchestrator"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+pythonpath = ["pipeline"]
+testpaths = ["tests/python"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "pipeline"
+packages = ["orchestrator"]

@@ -1,0 +1,7 @@
+[package]
+name = "corpus"
+version = "0.1.0"
+edition = "2024"   # avl.rs uses let-chains
+
+# No external dependencies (TASK.md hard rule).
+[dependencies]
