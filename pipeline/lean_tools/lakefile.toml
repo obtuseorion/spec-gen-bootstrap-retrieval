@@ -1,5 +1,5 @@
 name = "leantools"
-defaultTargets = ["leantools"]
+defaultTargets = ["LeanTools", "leantools"]
 
 # The emitted project (scripts/check.sh output). Its transitive dependencies
 # (Aeneas Lean backend, Mathlib, Plausible, …) are resolved through the shared
@@ -10,6 +10,7 @@ path = "../../corpus/lean"
 
 [[lean_lib]]
 name = "LeanTools"
+globs = ["LeanTools.*"]
 
 [[lean_exe]]
 name = "leantools"
