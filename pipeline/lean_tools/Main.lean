@@ -2,6 +2,7 @@ import LeanTools.Common
 import LeanTools.Graph
 import LeanTools.SpecForm
 import LeanTools.Mutate
+import LeanTools.Gate
 /-!
 `lake exe leantools <cmd> --project <root> [--namespace Corpus] <cmd args…>`
 
@@ -34,9 +35,22 @@ unsafe def main (argv : List String) : IO UInt32 := do
           let max := (args["max-mutants"]?.bind String.toNat?).getD 200
           let seed := (args["seed"]?.bind String.toNat?).getD 0
           Mutate.run p unit.toName members max seed
+        | "gate" => do
+          let some unit := args["unit"]? | throw <| IO.userError "missing --unit"
+          let some spec := args["spec"]? | throw <| IO.userError "missing --spec"
+          let members := args["members"]?.map fun s => (s.splitOn ",").toArray.map String.toName
+          let runs := (args["runs"]?.bind String.toNat?).getD 200
+          let max := (args["max-mutants"]?.bind String.toNat?).getD 200
+          let timeout := (args["timeout"]?.bind String.toNat?).getD 10
+          let seed := (args["seed"]?.bind String.toNat?).getD 0
+          let chunk := (args["chunk"]?.bind String.toNat?).getD 16
+          Gate.run p unit.toName members spec runs max timeout seed chunk
         | other => throw <| IO.userError s!"unknown command {other}\n{usage}"
       emit out
-      return (0 : UInt32)
+      -- Runaway evaluation tasks (mutants that diverge) would keep the runtime from
+      -- shutting down; the JSON is complete at this point, so leave immediately.
+      (← IO.getStdout).flush
+      IO.Process.exit 0
   catch e =>
     emitError (toString e)
     return (1 : UInt32)

@@ -1,0 +1,6 @@
+{
+  "a_true_post": {"unit": "Corpus.demo.mul2_add1", "runs": 100, "timeout": 5},
+  "b_exact":     {"unit": "Corpus.adt_borrows.array_shared_borrow", "runs": 100, "timeout": 5},
+  "c_density":   {"unit": "Corpus.demo.incr", "runs": 100, "timeout": 5},
+  "de_loop":     {"unit": "Corpus.loops.decode", "members": "Corpus.loops.decode_loop0_loop0.body,Corpus.loops.decode_loop0_loop0", "runs": 50, "timeout": 5}
+}

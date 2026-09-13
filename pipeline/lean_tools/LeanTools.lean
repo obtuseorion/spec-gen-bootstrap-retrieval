@@ -6,3 +6,5 @@ import LeanTools.Mut
 import LeanTools.Graph
 import LeanTools.SpecForm
 import LeanTools.Mutate
+import LeanTools.Eval
+import LeanTools.Gate
