@@ -20,6 +20,7 @@ import argparse
 import json
 import shutil
 import sys
+import textwrap
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -48,6 +49,16 @@ def member_order(unit: Unit, namespace: str = "Corpus") -> list[str]:
             i = unit.source.find(f"def {short} ")
         return i if i >= 0 else 10**9
     return sorted(unit.all_members, key=pos)
+
+
+def proof_block(block: str) -> str:
+    """Accept a bare tactic block or a whole theorem; return the dedented tactic block."""
+    text = block.strip("\n")
+    if text.lstrip().startswith("@[") or text.lstrip().startswith("theorem"):
+        i = text.find(":= by")
+        if i >= 0:
+            text = text[i + len(":= by"):]
+    return textwrap.dedent(text).strip("\n")
 
 
 class Pipeline:
@@ -261,6 +272,7 @@ class Pipeline:
             if block is None:
                 feedback = "The reply must contain exactly one ```lean block with the tactic proof."
                 continue
+            block = proof_block(block)
             (proofs_dir / f"{member}.lean").write_text(block.rstrip() + "\n")
             checked = members[: i + 1]
             pc = run_proofcheck(self.tools, unit, checked, specs_dir, proofs_dir, self.store.specs_dir, self.member_to_unit, member)

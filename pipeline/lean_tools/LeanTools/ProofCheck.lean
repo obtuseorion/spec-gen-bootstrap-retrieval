@@ -56,7 +56,11 @@ def readPerMember (path : System.FilePath) (members : Array Name) : IO (Array (N
 
 /-- Replace the final `by sorry` of a spec with the proof block. -/
 def spliceProof (spec : String) (proof : String) : String :=
-  let proof := proof.trimAscii.toString
+  -- dedent uniformly (the model may indent the first line differently from the rest)
+  let lines := (proof.splitOn "\n").filter fun l => !l.trimAscii.toString.isEmpty
+  let indent := lines.foldl (fun m l => min m ((l.toList.takeWhile (· == ' ')).length)) 1000
+  let lines := lines.map fun l => String.ofList (l.toList.drop indent)
+  let proof := String.intercalate "\n" lines
   let proofBlock := if proof.startsWith "by" then proof else "by\n  " ++ (String.intercalate "\n  " (proof.splitOn "\n"))
   match spec.splitOn "by sorry" with
   | [] => spec
@@ -172,12 +176,26 @@ unsafe def run (p : Project) (unit : Name) (members? : Option (Array Name)) (spe
         if ← isEmittedFunction env mods n ci then acc := acc.insert n
     return acc
   let isNode := fun n => isNodeArr.contains n
-  -- constants the unit needs (through auxiliaries), in file order
+  -- constants the unit needs, in file order: nodes (callees) and every crate constant walked
+  -- through on the way to them (globals, instance structures, …), which the opaque scratch
+  -- must copy verbatim
   let needed := Id.run do
     let mut acc : Std.HashSet Name := {}
-    for m in members do
-      for u in reachableConsts env mods isNode m do
-        if isCrateConst env mods u && !memberSet.contains u then acc := acc.insert u
+    let mut visited : Std.HashSet Name := {}
+    let mut stack : List Name := members.toList
+    while true do
+      match stack with
+      | [] => break
+      | c :: rest =>
+        stack := rest
+        if visited.contains c then continue
+        visited := visited.insert c
+        let some ci := env.find? c | continue
+        let some v := ci.value? | continue
+        for u in v.getUsedConstants do
+          if memberSet.contains u || !isCrateConst env mods u then continue
+          acc := acc.insert u
+          if !isNode u && !isExternalConst env mods u && !isAuxName u then stack := u :: stack
     return acc
   let neededArr := needed.toArray.qsort fun a b => lineOf a < lineOf b
   let calleeNodes := neededArr.filter isNode

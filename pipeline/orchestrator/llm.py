@@ -49,6 +49,8 @@ class AnthropicLLM:
     model: str = "claude-opus-5"
     temperature: float | None = None
     name: str = "anthropic"
+    effort: str = "medium"          # output_config.effort for the call (adaptive thinking on)
+    retry_effort: str = "low"       # used once when a call returns no text (thinking exhausted max_tokens)
     _client: Any = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
@@ -56,28 +58,39 @@ class AnthropicLLM:
 
         self._client = anthropic.Anthropic(max_retries=4)
 
-    def complete(self, prompt: str, max_tokens: int) -> tuple[str, Usage]:
-        t0 = time.monotonic()
+    def _call(self, prompt: str, max_tokens: int, effort: str) -> Any:
         kwargs: dict[str, Any] = dict(
             model=self.model,
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
+            output_config={"effort": effort},
             # server-side refusal fallbacks: a policy decline re-runs the request on a fallback model
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",
         )
         try:
             with self._client.beta.messages.stream(**kwargs) as stream:
-                message = stream.get_final_message()
+                return stream.get_final_message()
         except TypeError:
             # SDK without the server-side fallback parameter: plain request
             kwargs.pop("betas", None)
             kwargs.pop("fallbacks", None)
             with self._client.messages.stream(**kwargs) as stream:
-                message = stream.get_final_message()
+                return stream.get_final_message()
+
+    def complete(self, prompt: str, max_tokens: int) -> tuple[str, Usage]:
+        t0 = time.monotonic()
+        message = self._call(prompt, max_tokens, self.effort)
+        usage = Usage(input_tokens=message.usage.input_tokens, output_tokens=message.usage.output_tokens, calls=1)
         text = "".join(block.text for block in message.content if block.type == "text")
-        usage = Usage(input_tokens=message.usage.input_tokens, output_tokens=message.usage.output_tokens,
-                      calls=1, elapsed_s=round(time.monotonic() - t0, 3))
+        if not text.strip() and message.stop_reason == "max_tokens" and self.retry_effort != self.effort:
+            # thinking consumed the whole budget: one retry at lower effort
+            message = self._call(prompt, max_tokens, self.retry_effort)
+            usage.input_tokens += message.usage.input_tokens
+            usage.output_tokens += message.usage.output_tokens
+            usage.calls += 1
+            text = "".join(block.text for block in message.content if block.type == "text")
+        usage.elapsed_s = round(time.monotonic() - t0, 3)
         if message.stop_reason == "refusal":
             text = ""
         return text, usage
@@ -110,5 +123,6 @@ def make_llm(kind: str, config: dict[str, Any], fixtures: Path | None = None) ->
     if kind == "fake":
         return FakeLLM(fixtures=fixtures or Path("tests/fixtures/fake_llm"))
     if kind == "anthropic":
-        return AnthropicLLM(model=config.get("model", "claude-opus-5"))
+        return AnthropicLLM(model=config.get("model", "claude-opus-5"), effort=str(config.get("effort", "medium")),
+                            retry_effort=str(config.get("retry_effort", "low")))
     raise ValueError(f"unknown llm kind {kind!r}")
