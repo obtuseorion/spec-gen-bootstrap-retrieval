@@ -8,6 +8,10 @@ defaultTargets = ["LeanTools", "leantools"]
 name = "corpus"
 path = "../../corpus/lean"
 
+[[require]]
+name = "mlkem"
+path = "../../crates/mlkem-lean"
+
 [[lean_lib]]
 name = "LeanTools"
 globs = ["LeanTools.*"]

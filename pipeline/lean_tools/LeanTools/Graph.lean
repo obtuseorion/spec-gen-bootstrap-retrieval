@@ -25,6 +25,7 @@ structure Unit where
   members : Array String
   loops : Array String
   callees : Array String
+  externals : Array String            -- crate constants without a value (external models) reached by the unit
   is_divergent : Bool
   is_generic : Bool
   signature : Signature
@@ -272,6 +273,7 @@ def run (p : Project) : IO Json := do
     let all := fams ++ loops
     let mut callees : Std.HashSet Name := {}
     let mut called : Std.HashSet Name := {}
+    let mut externals : Std.HashSet Name := {}
     let mut src := ""
     let mut divergent := false
     let mut generic := false
@@ -283,6 +285,10 @@ def run (p : Project) : IO Json := do
         if isNode u then
           let c := compOf.get! (famOf u)
           if c != cid then callees := callees.insert c
+        else if isCrateConst env mods u then
+          match env.find? u with
+          | some (.axiomInfo _) | some (.opaqueInfo _) => externals := externals.insert u
+          | _ => pure ()
         else if (`Aeneas.Std).isPrefixOf u && !(u.getString!.startsWith "inst") then
           if let some ci := env.find? u then
             if (ci.isDefinition || ci.isTheorem) && !(ci.type.getForallBody.isSort) then
@@ -298,6 +304,7 @@ def run (p : Project) : IO Json := do
       members := fams.map toString
       loops := loops.map toString
       callees := (callees.toArray.map toString).qsort (· < ·)
+      externals := (externals.toArray.map toString).qsort (· < ·)
       is_divergent := divergent
       is_generic := generic
       signature := {

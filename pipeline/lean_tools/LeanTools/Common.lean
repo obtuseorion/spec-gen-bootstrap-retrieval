@@ -106,6 +106,9 @@ partial def reachableConsts (env : Environment) (mods : Std.HashSet Name)
           out := out.insert u
         else if isNode u then
           out := out.insert u
+        else if isCrateConst env mods u && (match env.find? u with | some (.axiomInfo _) | some (.opaqueInfo _) => true | _ => false) then
+          -- external model (axiom / opaque): a leaf, reported by the graph as `externals`
+          out := out.insert u
         else if isCrateConst env mods u then
           -- auxiliary of the crate: walk through it (but not through `_proof_n`
           -- terms — decidability proofs of literals never mention emitted functions)

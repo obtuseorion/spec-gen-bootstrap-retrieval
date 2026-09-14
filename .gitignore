@@ -12,3 +12,8 @@ pipeline/lean_tools/.lake/
 corpus_store/
 runs/
 .DS_Store
+crates/libcrux/
+crates/mlkem-lean/.lake/
+crates/mlkem-lean/Funs.lean.orig
+crates/mlkem-lean/*.log
+crates/mlkem-lean/prune.out

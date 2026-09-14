@@ -21,7 +21,8 @@ from typing import Any
 import numpy as np
 
 ADMITTED = ("proved", "proved_modular")
-FAILURE_STATUSES = ("spec_rejected", "proof_failed", "proof_blocked_by_callee", "skipped_generic", "skipped_divergent")
+FAILURE_STATUSES = ("spec_rejected", "proof_failed", "proof_blocked_by_callee", "skipped_generic", "skipped_divergent",
+                    "skipped_external")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS records (

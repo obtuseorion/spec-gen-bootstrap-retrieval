@@ -44,6 +44,7 @@ class Unit:
     signature: Signature
     source: str
     module: str = ""
+    externals: tuple[str, ...] = ()
 
     @property
     def all_members(self) -> tuple[str, ...]:
@@ -54,12 +55,14 @@ class Unit:
     def from_json(d: dict[str, Any]) -> Unit:
         return Unit(id=d["id"], kind=d["kind"], members=tuple(d["members"]), loops=tuple(d["loops"]),
                     callees=tuple(d["callees"]), is_divergent=bool(d["is_divergent"]), is_generic=bool(d["is_generic"]),
-                    signature=Signature.from_json(d["signature"]), source=d["source"], module=d.get("module", ""))
+                    signature=Signature.from_json(d["signature"]), source=d["source"], module=d.get("module", ""),
+                    externals=tuple(d.get("externals", [])))
 
     def to_json(self) -> dict[str, Any]:
         return {"id": self.id, "kind": self.kind, "members": list(self.members), "loops": list(self.loops),
                 "callees": list(self.callees), "is_divergent": self.is_divergent, "is_generic": self.is_generic,
-                "signature": self.signature.to_json(), "source": self.source, "module": self.module}
+                "signature": self.signature.to_json(), "source": self.source, "module": self.module,
+                "externals": list(self.externals)}
 
 
 @dataclass
@@ -83,6 +86,12 @@ class Graph:
             seen.add(c)
             stack.extend(self.units[c].callees)
         return seen
+
+    def transitive_externals(self, unit_id: str) -> set[str]:
+        out = set(self.units[unit_id].externals)
+        for c in self.transitive_callees(unit_id):
+            out |= set(self.units[c].externals)
+        return out
 
     def member_to_unit(self) -> dict[str, str]:
         return {m: u.id for u in self.units.values() for m in u.all_members}

@@ -1,0 +1,7 @@
+libcrux_sha3.portable.incremental.shake128_init
+libcrux_sha3.portable.incremental.shake128_absorb_final
+libcrux_sha3.portable.incremental.shake128_squeeze_first_three_blocks
+libcrux_sha3.portable.incremental.shake128_squeeze_next_block
+libcrux_sha3.portable.sha256
+libcrux_sha3.portable.sha512
+libcrux_sha3.portable.shake256

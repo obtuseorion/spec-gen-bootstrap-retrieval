@@ -1,0 +1,45 @@
+# Budgets, thresholds, model names and paths for the orchestrator.
+# Paths are relative to the repository root unless absolute.
+
+[paths]
+project = "crates/mlkem-lean"                  # emitted from libcrux-ml-kem (crates/mlkem-lean/README.md)
+project_namespace = "MlKem"                  # root module / namespace of the emitted crate
+graph_truth = ""
+lean_tools = "pipeline/lean_tools"
+corpus_store = "corpus_store"
+runs = "runs"
+callee_specs = "corpus_store/mlkem/specs"
+external_corpus = ""                          # arms B/E
+prompts = "pipeline/prompts"
+
+[toolchain]
+aeneas_commit = "5d08da45a405913bbee6fd544e01debf8154ac9d"   # see docs/phase0.md (pin drift)
+charon_commit = "f5208b1c4ce287898a1fc015d41a20da3baf0974"
+lean = "leanprover/lean4:v4.31.0"
+
+[budgets]
+spec_attempts = 5
+proof_attempts = 5
+pbt_runs = 200
+max_mutants = 200
+eval_timeout_s = 10
+leantools_timeout_s = 600
+
+[gate]
+precond_density_floor = 0.2
+
+[retrieval]
+tau_spec = 0.0                   # 0.0 = always retrieve top-2 (calibration mode); frozen after §8
+tau_proof = 0.0
+jaccard_min = 0.3
+top_k = 2
+example_token_cap = 1500
+embedding_model = "jinaai/jina-embeddings-v2-base-code"
+embedding_fallback = "hashed-ngram"   # used only when the model cannot be loaded; recorded in run metadata
+
+[llm]
+model = "claude-opus-5"
+max_tokens_spec = 1500
+max_tokens_proof = 4000
+tokenizer = "approx:chars/3.5"   # fixed approximation used for the K cap (recorded in run metadata)
+temperature = 0.0

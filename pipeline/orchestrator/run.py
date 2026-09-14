@@ -39,10 +39,10 @@ from orchestrator.retrieval import Retriever
 from orchestrator.units import Graph, Unit, load_graph
 
 
-def member_order(unit: Unit) -> list[str]:
+def member_order(unit: Unit, namespace: str = "Corpus") -> list[str]:
     """Members in source order: loop bodies, loops, then parents (the order of the pretty-printed unit)."""
     def pos(m: str) -> int:
-        short = m.split(".", 1)[1] if m.startswith("Corpus.") else m
+        short = m[len(namespace) + 1:] if m.startswith(namespace + ".") else m
         i = unit.source.find(f"def {short}\n")
         if i < 0:
             i = unit.source.find(f"def {short} ")
@@ -76,6 +76,9 @@ class Pipeline:
                                  float(str(config.llm.get("tokenizer", "approx:chars/3.5")).split("/")[-1]), config.namespace)
         self.work = self.run_dir / "work"
         self.work.mkdir(parents=True, exist_ok=True)
+        # external models that are stubs (`<project>/external_stubs.txt`): units reaching one are skipped
+        stubs_file = config.project / "external_stubs.txt"
+        self.external_stubs = set(stubs_file.read_text().split()) if stubs_file.is_file() else set()
         self._write_metadata()
 
     # ---- helpers -------------------------------------------------------------
@@ -156,12 +159,17 @@ class Pipeline:
         if unit.is_divergent:
             self._failure(unit, "skipped_divergent", order_index, attempts, tokens)
             return "skipped_divergent"
+        stubs = sorted(self.graph.transitive_externals(unit.id) & self.external_stubs)
+        if stubs:
+            self._failure(unit, "skipped_external", order_index, attempts, tokens,
+                          last_error="reaches external stub(s): " + ", ".join(stubs), externals=stubs)
+            return "skipped_external"
         for c in sorted(self.graph.transitive_callees(unit.id)):
             if not self.store.has_record(c):
                 self._failure(unit, "proof_blocked_by_callee", order_index, attempts, tokens, blame=c,
                               last_error=f"callee {c} has no admitted record")
                 return "proof_blocked_by_callee"
-        members = member_order(unit)
+        members = member_order(unit, self.config.namespace)
         udir = self.work / unit.id
         specs_dir, proofs_dir = udir / "specs", udir / "proofs"
         for d in (specs_dir, proofs_dir):
