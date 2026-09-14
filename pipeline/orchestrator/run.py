@@ -116,6 +116,11 @@ class Pipeline:
                 p = self.store.spec_path(m)
                 if p.is_file():
                     out[m] = p.read_text()
+        # external models with a step lemma (`<project>/external_specs/<constant>.lean`)
+        for ext in unit.externals:
+            p = self.config.project / "external_specs" / f"{ext}.lean"
+            if p.is_file():
+                out[ext] = p.read_text()
         return out
 
     def _failure(self, unit: Unit, status: str, order_index: int, attempts: dict[str, int], tokens: dict[str, int],

@@ -39,7 +39,7 @@ embedding_fallback = "hashed-ngram"   # used only when the model cannot be loade
 
 [llm]
 model = "claude-opus-5"
-max_tokens_spec = 1500
-max_tokens_proof = 4000
+max_tokens_spec = 8000
+max_tokens_proof = 12000
 tokenizer = "approx:chars/3.5"   # fixed approximation used for the K cap (recorded in run metadata)
 temperature = 0.0

@@ -235,18 +235,22 @@ unsafe def run (p : Project) (unit : Name) (members? : Option (Array Name)) (spe
     return toJson res
   -- 4. opaque re-check in a fresh environment: Aeneas + types + instances
   let typesModule := typesModule?.getD (p.ns ++ `Types)
+  -- external models (`<ns>.FunsExternal`, `<ns>.FunsExternalSpecs`, …) are not callees: keep them
+  let externalMods := env.header.moduleNames.filter fun m =>
+    p.ns.isPrefixOf m && (m.getString!.endsWith "External" || m.getString!.endsWith "ExternalSpecs")
   let envO ← (do
     initSearchPath (← findSysroot)
     Lean.enableInitializersExecution
-    importModules (imports := #[{ module := `Aeneas }, { module := typesModule }, { module := `LeanTools.Instances }])
-      (opts := {}) (trustLevel := 0) (loadExts := true))
+    let imports := #[{ module := `Aeneas }, { module := typesModule }, { module := `LeanTools.Instances }]
+      ++ externalMods.map fun m => ({ module := m } : Import)
+    importModules (imports := imports) (opts := {}) (trustLevel := 0) (loadExts := true))
   -- nodes outside the unit → opaque + spec axiom; other crate constants not in the
   -- types module → verbatim source
   let typesIdx := env.getModuleIdx? typesModule
   let mut cache : SourceCache := {}
   let mut scratch := ""
   for g in neededArr do
-    if env.getModuleIdxFor? g == typesIdx then continue
+    if env.getModuleIdxFor? g == typesIdx || isExternalConst env mods g then continue
     let (c', s?) ← declSource p env cache g
     cache := c'
     let some src := s? | continue

@@ -285,10 +285,8 @@ def run (p : Project) : IO Json := do
         if isNode u then
           let c := compOf.get! (famOf u)
           if c != cid then callees := callees.insert c
-        else if isCrateConst env mods u then
-          match env.find? u with
-          | some (.axiomInfo _) | some (.opaqueInfo _) => externals := externals.insert u
-          | _ => pure ()
+        else if isExternalConst env mods u then
+          externals := externals.insert u
         else if (`Aeneas.Std).isPrefixOf u && !(u.getString!.startsWith "inst") then
           if let some ci := env.find? u then
             if (ci.isDefinition || ci.isTheorem) && !(ci.type.getForallBody.isSort) then

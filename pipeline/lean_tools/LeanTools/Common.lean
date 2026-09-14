@@ -45,6 +45,16 @@ def crateConstNames (env : Environment) (mods : Std.HashSet Name) : Array Name :
       out := out ++ env.header.moduleData[idx.toNat]!.constNames
   return out
 
+/-- Is `n` an external model: declared in a crate module named `…External` (Aeneas's
+`FunsExternal` / `TypesExternal`), or an axiom / opaque constant of the crate? -/
+def isExternalConst (env : Environment) (mods : Std.HashSet Name) (n : Name) : Bool :=
+  match env.getModuleIdxFor? n with
+  | some idx =>
+    let m := env.header.moduleNames[idx.toNat]!
+    mods.contains m && ((m.getString!.endsWith "External") ||
+      (match env.find? n with | some (.axiomInfo _) | some (.opaqueInfo _) => true | _ => false))
+  | none => false
+
 /-- Is `n` declared in one of the crate's modules? -/
 def isCrateConst (env : Environment) (mods : Std.HashSet Name) (n : Name) : Bool :=
   match env.getModuleIdxFor? n with
@@ -78,6 +88,7 @@ return type is `Result _`, and not an auxiliary? -/
 def isEmittedFunction (env : Environment) (mods : Std.HashSet Name) (n : Name) (ci : ConstantInfo) : MetaM Bool := do
   let .defnInfo _ := ci | return false
   unless isCrateConst env mods n do return false
+  if isExternalConst env mods n then return false
   if isAuxName n then return false
   if isMatcherCore env n || isAuxRecursor env n || isRecCore env n || isCasesOnRecursor env n then return false
   if env.isProjectionFn n then return false
@@ -106,8 +117,8 @@ partial def reachableConsts (env : Environment) (mods : Std.HashSet Name)
           out := out.insert u
         else if isNode u then
           out := out.insert u
-        else if isCrateConst env mods u && (match env.find? u with | some (.axiomInfo _) | some (.opaqueInfo _) => true | _ => false) then
-          -- external model (axiom / opaque): a leaf, reported by the graph as `externals`
+        else if isExternalConst env mods u then
+          -- external model: a leaf, reported by the graph as `externals`
           out := out.insert u
         else if isCrateConst env mods u then
           -- auxiliary of the crate: walk through it (but not through `_proof_n`
