@@ -41,14 +41,25 @@ from orchestrator.units import Graph, Unit, load_graph
 
 
 def member_order(unit: Unit, namespace: str = "Corpus") -> list[str]:
-    """Members in source order: loop bodies, loops, then parents (the order of the pretty-printed unit)."""
+    """Members in dependency order: loop bodies, then loops, then the parent definitions.
+
+    Aeneas names loop helpers `f_loop` / `f_loop.body` (nested: `f_loop_loop.body`), so the number
+    of loop markers in a name is its depth in the call tree of the unit. Deeper members come first
+    (their specs must be admitted before the caller's proof can `step` through them); ties keep
+    the source order of the pretty-printed unit. (The unit's `source` field lists the parent
+    before its helpers, so plain source order would prove the parent first, without its loop's
+    specification in scope.)"""
     def pos(m: str) -> int:
         short = m[len(namespace) + 1:] if m.startswith(namespace + ".") else m
         i = unit.source.find(f"def {short}\n")
         if i < 0:
             i = unit.source.find(f"def {short} ")
         return i if i >= 0 else 10**9
-    return sorted(unit.all_members, key=pos)
+
+    def depth(m: str) -> int:
+        return m.count("_loop") + m.count(".body")
+
+    return sorted(unit.all_members, key=lambda m: (-depth(m), pos(m)))
 
 
 def proof_block(block: str) -> str:
