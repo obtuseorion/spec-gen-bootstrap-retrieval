@@ -87,7 +87,8 @@ partial def crateTypesOf (env : Environment) (mods : Std.HashSet Name) (e : Expr
     | c :: rest =>
       stack := rest
       if acc.contains c then continue
-      if !isCrateConst env mods c then continue
+      let foreignModel := (`Aeneas.Std.core).isPrefixOf c || (`Aeneas.Std.alloc).isPrefixOf c
+      if !isCrateConst env mods c && !foreignModel then continue
       match env.find? c with
       | some (.inductInfo info) =>
         acc := acc.insert c
@@ -101,6 +102,45 @@ partial def crateTypesOf (env : Environment) (mods : Std.HashSet Name) (e : Expr
             stack := v.getUsedConstants.toList ++ stack
       | none => pure ()
   return acc
+
+/-- Hand-built instance text for a structure when `deriving instance` fails (parameterised
+structures such as `MlKemPrivateKey (SIZE : Usize)`, or Aeneas's `core.ops.range.Range`). -/
+def fallbackInstance (env : Environment) (t : Name) (cls : String) : MetaM (Option String) := do
+  let some (.inductInfo info) := env.find? t | return none
+  let some sinfo := getStructureInfo? env t | return none
+  let fields := sinfo.fieldNames
+  if fields.isEmpty then return none
+  forallTelescope info.type fun params _ => do
+    let mut binders := ""
+    let mut instBinders := ""
+    let mut args := ""
+    for p in params do
+      let d ← p.fvarId!.getDecl
+      let ty ← ppExpr (← instantiateMVars d.type)
+      binders := binders ++ s!" \{{d.userName} : {ty}}"
+      args := args ++ s!" {d.userName}"
+      if (← instantiateMVars d.type).isSort then
+        let c := match cls with
+          | "Arbitrary" => "Plausible.Arbitrary" | "Shrinkable" => "Plausible.Shrinkable"
+          | "Repr" => "Repr" | _ => "DecidableEq"
+        instBinders := instBinders ++ s!" [{c} {d.userName}]"
+    let target := s!"({t}{args})"
+    let fs := fields.map (·.toString)
+    let body ← match cls with
+      | "Arbitrary" =>
+        let lets := String.join (fs.map fun f => s!"let {f} ← Plausible.Arbitrary.arbitrary; ").toList
+        pure s!"⟨do {lets}pure ⟨{String.intercalate ", " fs.toList}⟩⟩"
+      | "Shrinkable" => pure "⟨fun _ => []⟩"
+      | "Repr" =>
+        let parts := fs.map fun f => s!"\"{f} := \" ++ reprStr x.{f}"
+        pure s!"⟨fun x _ => Std.Format.text (\"\{ \" ++ {String.intercalate " ++ \", \" ++ " parts.toList} ++ \" }\")⟩"
+      | _ =>
+        let eqs := String.intercalate " ∧ " (fs.map fun f => s!"a.{f} = b.{f}").toList
+        pure s!"fun a b => decidable_of_iff ({eqs}) (by cases a; cases b; simp)"
+    let clsName := match cls with
+      | "Arbitrary" => "Plausible.Arbitrary" | "Shrinkable" => "Plausible.Shrinkable"
+      | "Repr" => "Repr" | _ => "DecidableEq"
+    return some s!"instance{binders}{instBinders} : {clsName} {target} :=\n  {body}\n"
 
 structure Elab1 where
   env : Environment
@@ -172,7 +212,16 @@ def run (p : Project) (unit : Name) (members? : Option (Array Name)) (specFile :
       if r1.ok then e := r1.env else next := (t, cls) :: next
     pending := next.reverse
     if pending.isEmpty then break
-  for (t, cls) in pending do notes := notes.push s!"could not derive {cls} for {t}"
+  -- fallback instances for what could not be derived
+  let mut still := []
+  for (t, cls) in pending do
+    let (txt?, _, _) ← runMeta e (fallbackInstance e t cls)
+    match txt? with
+    | some txt =>
+      let r1 ← elab1 e header txt s!"<fallback {cls} {t}>"
+      if r1.ok then e := r1.env else still := (t, cls) :: still
+    | none => still := (t, cls) :: still
+  for (t, cls) in still.reverse do notes := notes.push s!"could not derive {cls} for {t}"
   -- mutants
   let mut muts : Array Mutate.Mutant := #[]
   for m in mutRes.mutants do

@@ -65,6 +65,8 @@ private def allowedCrateConst (env : Environment) (n : Name) : MetaM Bool := do
   if env.isProjectionFn n || isMatcherCore env n || isAuxRecursor env n || isCasesOnRecursor env n then return true
   if ← isInstance n then return true
   if isAuxName n then return true
+  -- type aliases (`def T := Unit`, `@[reducible] def W (T : Type) := T`)
+  if ci.type.isSort || ci.type.getForallBody.isSort then return true
   -- `structure` derived `instDecidableEq…`, `Insts`, discriminant readers, …: instances above.
   return false
 
