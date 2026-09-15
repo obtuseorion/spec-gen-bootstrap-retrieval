@@ -46,7 +46,8 @@ You prove Lean 4 specifications of functions that Aeneas produced from Rust.
 
   Loop bodies (`_loop.body`): the first call is `core.iter.range.IteratorRange.next`, whose
   postcondition is an `if start < end then o = some start ∧ … else o = none ∧ …`; split on that
-  condition before anything else. Verified skeleton for a body over a `Range Usize`:
+  condition before anything else. Checker-verified skeleton for a body over a `Range Usize` that
+  indexes 16-element arrays (`Array I16 16#usize`) and updates one lane (adapt names and bounds):
 
   ```lean
     unfold f_loop.body
@@ -55,27 +56,45 @@ You prove Lean 4 specifications of functions that Aeneas produced from Rust.
     · rw [if_pos hlt] at o_post1
       obtain ⟨hio, hst⟩ := o_post1
       simp only [hio]
-      have hb1 : iter.start.val < lhs.val.length := by scalar_tac   -- one per indexed sequence
+      have hb1 : iter.start.val < 16 := by scalar_tac            -- one bound per indexed sequence
+      obtain ⟨hmin, hmax⟩ := hbound _ hb1                          -- the lane-wise overflow hypothesis
+      have hlen16 : lhs.elements.val.length = 16 := by scalar_tac
+      have hlen16' : rhs.elements.val.length = 16 := by scalar_tac
+      simp only [getElem!_pos, hlen16, hlen16', hb1] at hmin hmax  -- `[i]!` → `[i]` so scalar_tac sees them
       step*
-      -- when the body computes with `&&&`, `|||`, `^^^`, `~~~` (results `x` with `x_post2 : x.bv = …`):
+      all_goals try (simp only [i1_post, i2_post]; scalar_tac)     -- overflow side goals of `i2 + i1`
+      refine ⟨fun v hv => ?_, fun v hv => by simp at hv⟩
+      simp only [ControlFlow.cont.injEq] at hv
+      subst hv
+      refine ⟨hlt, by simp [hst], by simp [o_post2], by simp, ?_, ?_⟩
+      · intro j hj hne                                             -- untouched lanes
+        simp only [a_post, Array.set_val_eq]
+        simp [getElem!_pos, hlen16, hj, Ne.symm hne]
+      · simp only [a_post, Array.set_val_eq]                       -- the updated lane
+        simp [getElem!_pos, hlen16, hb1, i3_post, i1_post, i2_post]
+    · rw [if_neg hlt] at o_post1
+      obtain ⟨hio, hst⟩ := o_post1
+      simp only [hio]
+      step*
+      refine ⟨fun v hv => by simp at hv, fun v hv => ?_⟩
+      simp only [ControlFlow.done.injEq] at hv
+      subst hv
+      exact ⟨rfl, by scalar_tac⟩
+  ```
+
+  Bodies that compute with `&&&`, `|||`, `^^^`, `~~~` get results `x` with `x_post2 : x.bv = …`;
+  prove the value of the stored element through bitvectors before `subst`ing it (checker-verified):
+
+  ```lean
       have hval : outi = (lhs.val[iter.start.val]! &&& mask) ||| (rhs.val[iter.start.val]! &&& ~~~ mask) := by
         rw [UScalar.eq_equiv_bv_eq]
         simp only [outi_post2, i2_post2, i5_post2, i4_post, i1_post, i3_post,
                    UScalar.bv_and, UScalar.bv_or, UScalar.bv_xor, UScalar.bv_not]
         simp [getElem!_pos, hb1, hb2]
       subst hval
-      refine ⟨fun v hv => ?_, fun v hv => by simp at hv⟩
-      simp only [ControlFlow.cont.injEq] at hv
-      subst hv
-      refine ⟨hlt, by simp [hst], by simp [o_post2], ?_⟩
-      simp [a_post, Array.set_val_eq]        -- `Array.set` / `update` results
-      -- without bit operations, `simp_all <;> scalar_tac` usually closes the goal after `step*`
-    · rw [if_neg hlt] at o_post1
-      obtain ⟨hio, hst⟩ := o_post1
-      simp only [hio]
-      step*
-      simp_all <;> scalar_tac
   ```
+
+  Without bit operations or arrays, `simp_all <;> scalar_tac` after `step*` usually closes the goal.
 
   The invariant must carry the range's fixed `«end»`, the bounds the body's preconditions need, and
   the accumulator described in terms of the initial arguments. Bit-level facts about `|||`, `^^^`,
