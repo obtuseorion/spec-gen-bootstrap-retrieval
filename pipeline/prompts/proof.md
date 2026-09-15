@@ -28,7 +28,8 @@ You prove Lean 4 specifications of functions that Aeneas produced from Rust.
     apply loop.spec_decr_nat
       (measure := fun p => p.1.«end».val - p.1.start.val)
       (inv := fun p => p.1.«end» = iter.«end» ∧ <what holds of the accumulator p.2>)
-      (post := fun res => <the theorem's postcondition on res>)
+    -- do NOT pass `post :=`: `apply` reads it off the goal; an explicit `post` that is not
+    -- syntactically the theorem's postcondition makes `apply` fail to unify
     · rintro ⟨it, acc⟩ ⟨hend, hacc⟩
       simp only at hend hacc
       step as ⟨res, hc, hd⟩                -- the body's specification, its two conjuncts
