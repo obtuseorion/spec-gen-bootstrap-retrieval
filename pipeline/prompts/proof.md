@@ -35,6 +35,8 @@ You prove Lean 4 specifications of functions that Aeneas produced from Rust.
       step as ⟨res, hc, hd⟩                -- the body's specification, its two conjuncts
       rcases res with ⟨it', acc'⟩ | v
       · obtain ⟨h1, h2, h3, h4⟩ := hc _ rfl  -- start < end, start' = start + 1, end' = end, acc' = …
+        -- name EVERY conjunct in `simp only at … ⊢` below: it rewrites `(it', acc').1` to `it'` and
+        -- `(it', acc').2` to `acc'`; `omega`/`scalar_tac` cannot see through unreduced projections
         simp only at h2 h3 h4 ⊢              -- reduces `match cont (it', acc') with …` to
                                               -- a FLAT conjunction: inv-conjunct₁ ∧ … ∧ inv-conjunctₙ ∧ measure<
         refine ⟨h3.trans hend, ?_, ?_⟩       -- n + 1 fields, flat; a nested ⟨⟨…⟩, ?_⟩ fails with
