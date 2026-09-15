@@ -19,6 +19,8 @@ def specHeader (ns : Name) : String :=
   "set_option Aeneas.Deprecated.progressWarning false\n" ++
   "set_option maxHeartbeats 1000000\n" ++
   "set_option maxRecDepth 2048\n" ++
+  "set_option synthInstance.maxSize 4096\n" ++
+  "set_option synthInstance.maxHeartbeats 400000\n" ++
   "set_option linter.all false\n" ++
   s!"namespace {ns}\n"
 

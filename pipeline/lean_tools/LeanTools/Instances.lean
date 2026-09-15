@@ -51,4 +51,25 @@ instance decEqResult {α : Type u} [DecidableEq α] : DecidableEq (Result α) :=
     | .ok _, .fail _ | .ok _, .div | .fail _, .ok _ | .fail _, .div | .div, .ok _ | .div, .fail _ =>
       isFalse (by simp)
 
+/-! Case analysis on `core.result.Result` / `Option` results, written as bounded `∀`
+(`match` is not decidable for testing: each `match` is its own matcher constant). -/
+
+instance decForallOk {T E : Type} (r : core.result.Result T E) (P : T → Prop) [DecidablePred P] :
+    Decidable (∀ t, r = core.result.Result.Ok t → P t) :=
+  match r with
+  | .Ok t => decidable_of_iff (P t) (by simp)
+  | .Err _ => isTrue (by simp)
+
+instance decForallErr {T E : Type} (r : core.result.Result T E) (Q : E → Prop) [DecidablePred Q] :
+    Decidable (∀ e, r = core.result.Result.Err e → Q e) :=
+  match r with
+  | .Ok _ => isTrue (by simp)
+  | .Err e => decidable_of_iff (Q e) (by simp)
+
+instance decForallSome {T : Type} (o : Option T) (P : T → Prop) [DecidablePred P] :
+    Decidable (∀ t, o = some t → P t) :=
+  match o with
+  | some t => decidable_of_iff (P t) (by simp)
+  | none => isTrue (by simp)
+
 end LeanTools

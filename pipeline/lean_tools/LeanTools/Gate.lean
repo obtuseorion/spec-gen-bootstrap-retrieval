@@ -274,11 +274,17 @@ def run (p : Project) (unit : Name) (members? : Option (Array Name)) (specFile :
     let ret := if names.isEmpty then "()" else if names.size == 1 then names[0]! else "⟨" ++ String.intercalate ", " names.toList ++ "⟩"
     return s ++ s!"  pure ({ret})\n"
   let hypProp := if hyps.isEmpty then "True" else String.intercalate " ∧ " (hyps.map fun h => s!"({h.type})").toList
+  -- data binders of the theorem, as written (implicit ones made explicit), for the Prop abbreviations
+  let dataBindersTxt := String.intercalate " " (dataBinders.map fun b =>
+    "(" ++ String.intercalate " " b.names.toList ++ " : " ++ b.type ++ ")").toList
+  let appArgs := String.intercalate " " names.toList
   let base :=
     s!"abbrev LT_In : Type := {inType}\n" ++
     s!"def LT_gen : Plausible.Gen LT_In := do\n{genBody}" ++
-    s!"def LT_pre : LT_In → Bool := fun {pat} => decide ({hypProp})\n" ++
-    s!"def LT_spec_orig : LT_In → Bool := fun {pat} => decide ({concl})\n" ++
+    s!"abbrev LT_hyp {dataBindersTxt} : Prop := {hypProp}\n" ++
+    s!"def LT_pre : LT_In → Bool := fun {pat} => decide (LT_hyp {appArgs})\n" ++
+    s!"abbrev LT_prop_orig {dataBindersTxt} : Prop := {concl}\n" ++
+    s!"def LT_spec_orig : LT_In → Bool := fun {pat} => decide (LT_prop_orig {appArgs})\n" ++
     s!"def LT_probe_orig : LT_In → Bool := fun {pat} => let _ := ({progText}); true\n"
   let rb ← elab1 e header base "<gate base>"
   unless rb.ok do
@@ -314,7 +320,8 @@ def run (p : Project) (unit : Name) (members? : Option (Array Name)) (specFile :
     let progM := Mutate.renameIdents progText tbl
     let k := m.id
     let r1 ← elab1 e header
-      (s!"def LT_spec_{k} : LT_In → Bool := fun {pat} => decide ({conclM})\n") s!"<{k} closures>"
+      (s!"abbrev LT_prop_{k} {dataBindersTxt} : Prop := {conclM}\n" ++
+       s!"def LT_spec_{k} : LT_In → Bool := fun {pat} => decide (LT_prop_{k} {appArgs})\n") s!"<{k} closures>"
     unless r1.ok do
       notes := notes.push s!"mutant {k}: spec closure failed: {(r1.error.splitOn "\n")[0]!}"
       continue

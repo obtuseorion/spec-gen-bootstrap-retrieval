@@ -26,7 +26,7 @@ def Project.loadEnv (p : Project) (extraImports : Array Name := #[]) : IO Enviro
 /-- Run a `MetaM` computation against a loaded environment, returning the value and
 the messages produced. Heartbeats are unlimited; commands impose their own timeouts. -/
 def runMeta (env : Environment) (x : MetaM α) (fileName : String := "<leantools>") : IO (α × Environment × MessageLog) := do
-  let opts : Options := maxHeartbeats.set {} 0
+  let opts : Options := (maxHeartbeats.set {} 0) |> (synthInstance.maxSize.set · 4096) |> (synthInstance.maxHeartbeats.set · 400000)
   let ctx : Core.Context := { fileName, fileMap := default, options := opts,
                               maxHeartbeats := 0, currNamespace := .anonymous }
   let (a, coreSt, _) ← x.toIO ctx { env }

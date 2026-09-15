@@ -30,6 +30,8 @@ Rules:
   constructors and projections may appear.
 - Tuples in the result are destructured as `⦃ a b => … ⦄` (one name per component,
   the last one is the back function for `&mut` borrows).
+- Results of type `core.result.Result T E` or `Option T`: do not `match` (not testable);
+  write `(∀ t, r = .Ok t → P t) ∧ (∀ e, r = .Err e → Q e)` (resp. `∀ t, r = some t → P t`).
 - Names are relative to `namespace {{namespace}}` (write `demo.incr`, not `{{namespace}}.demo.incr`);
   the file is elaborated with `open Aeneas Aeneas.Std Result`.
 
