@@ -60,8 +60,15 @@ deriving instance Repr for Error
 def chooseNat (lo hi : Nat) (h : lo ≤ hi) : Gen Nat := do return (← Gen.choose Nat lo hi h).val
 def chooseInt (lo hi : Int) (h : lo ≤ hi) : Gen Int := do return (← Gen.choose Int lo hi h).val
 
-/-- Weighted natural number in `[0, max]`: boundary 0.3, small 0.5, uniform 0.2. -/
+/-- Weighted natural number in `[0, max]`: boundary 0.3, small 0.5, uniform 0.2.
+When the generator size is 0 ("small mode", set per array/slice by the sequence
+generators) only small values and the small boundary values are drawn, so that
+lane-wise preconditions on vectors are satisfiable. -/
 def genNatWeighted (max : Nat) : Gen Nat := do
+  let sz ← Gen.getSize
+  if sz == 0 then
+    let v ← chooseNat 0 63 (Nat.zero_le _)
+    return min v max
   let k ← chooseNat 0 9 (Nat.zero_le _)
   if k < 3 then
     let i ← chooseNat 0 4 (Nat.zero_le _)
@@ -75,8 +82,12 @@ def genNatWeighted (max : Nat) : Gen Nat := do
 
 /-- Weighted integer in `[min, max]` (`min ≤ 0 ≤ max`): boundary 0.3, small 0.5, uniform 0.2. -/
 def genIntWeighted (min max : Int) (h : min ≤ max) : Gen Int := do
-  let k ← chooseNat 0 9 (Nat.zero_le _)
   let clamp (v : Int) : Int := if v < min then min else if v > max then max else v
+  let sz ← Gen.getSize
+  if sz == 0 then
+    let v ← chooseInt (-63) 63 (by decide)
+    return clamp v
+  let k ← chooseNat 0 9 (Nat.zero_le _)
   if k < 3 then
     let i ← chooseNat 0 7 (Nat.zero_le _)
     let cands := #[0, 1, -1, 2, max, max - 1, min, min + 1]
@@ -125,18 +136,26 @@ def genListBounded {α : Type} [Arbitrary α] (bound : Nat := 16) : Gen { l : Li
   let ⟨l, h⟩ ← genListExact (α := α) k.val
   pure ⟨l, by rw [h]; exact k.property.2⟩
 
+/-- Run `g` in "small mode" (size 0) half of the time: all elements of one sequence are
+then small, so conjunctive bounds over every element hold often enough to be tested. -/
+def withSeqMode {α : Type} (g : Gen α) : Gen α := do
+  let k ← chooseNat 0 1 (Nat.zero_le _)
+  if k == 0 then Gen.resize (fun _ => 0) g else g
+
 instance instArbitraryAeneasArray {α : Type} [Arbitrary α] {n : Usize} : Arbitrary (Array α n) :=
-  ⟨do let ⟨l, h⟩ ← genListExact (α := α) n.val; pure ⟨l, h⟩⟩
+  ⟨withSeqMode (do let ⟨l, h⟩ ← genListExact (α := α) n.val; pure ⟨l, h⟩)⟩
 
 theorem sixteen_le_usize_max : 16 ≤ Usize.max := by scalar_tac
 
 instance instArbitrarySlice {α : Type} [Arbitrary α] : Arbitrary (Slice α) :=
-  ⟨do let ⟨l, h⟩ ← genListBounded (α := α) 16
-      pure ⟨l, by have := sixteen_le_usize_max; omega⟩⟩
+  ⟨withSeqMode (do
+      let ⟨l, h⟩ ← genListBounded (α := α) 16
+      pure ⟨l, by have := sixteen_le_usize_max; omega⟩)⟩
 
 instance instArbitraryVec {α : Type} [Arbitrary α] : Arbitrary (alloc.vec.Vec α) :=
-  ⟨do let ⟨l, h⟩ ← genListBounded (α := α) 16
-      pure ⟨l, by have := sixteen_le_usize_max; omega⟩⟩
+  ⟨withSeqMode (do
+      let ⟨l, h⟩ ← genListBounded (α := α) 16
+      pure ⟨l, by have := sixteen_le_usize_max; omega⟩)⟩
 
 /-- Shrink one element at a time; the length is fixed by the type. -/
 def shrinkListSameLength {α : Type u} [Shrinkable α] (l : List α) : List (List α) :=
