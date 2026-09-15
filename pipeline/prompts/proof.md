@@ -57,7 +57,19 @@ You prove Lean 4 specifications of functions that Aeneas produced from Rust.
       simp only [hio]
       have hb1 : iter.start.val < lhs.val.length := by scalar_tac   -- one per indexed sequence
       step*
-      simp_all <;> scalar_tac
+      -- when the body computes with `&&&`, `|||`, `^^^`, `~~~` (results `x` with `x_post2 : x.bv = …`):
+      have hval : outi = (lhs.val[iter.start.val]! &&& mask) ||| (rhs.val[iter.start.val]! &&& ~~~ mask) := by
+        rw [UScalar.eq_equiv_bv_eq]
+        simp only [outi_post2, i2_post2, i5_post2, i4_post, i1_post, i3_post,
+                   UScalar.bv_and, UScalar.bv_or, UScalar.bv_xor, UScalar.bv_not]
+        simp [getElem!_pos, hb1, hb2]
+      subst hval
+      refine ⟨fun v hv => ?_, fun v hv => by simp at hv⟩
+      simp only [ControlFlow.cont.injEq] at hv
+      subst hv
+      refine ⟨hlt, by simp [hst], by simp [o_post2], ?_⟩
+      simp [a_post, Array.set_val_eq]        -- `Array.set` / `update` results
+      -- without bit operations, `simp_all <;> scalar_tac` usually closes the goal after `step*`
     · rw [if_neg hlt] at o_post1
       obtain ⟨hio, hst⟩ := o_post1
       simp only [hio]
