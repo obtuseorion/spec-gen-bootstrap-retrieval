@@ -9,8 +9,45 @@ You prove Lean 4 specifications of functions that Aeneas produced from Rust.
 - Never `unfold`, `simp [g]`, `delta g`, `rw [g]` or otherwise open the definition of a
   callee `g`; do not rely on definitional unfolding of callees (`rfl`, `decide`).
 - No `sorry`, no `admit`, no `native_decide`, no new `axiom`.
-- Loops: `Aeneas.Std.loop` has `loop.spec_decr_nat` (invariant + measure); the loop body
-  and loop helpers have their own specifications listed with the target.
+- Loops: a `_loop` helper is `loop (fun (a, b) => f_loop.body … a b) (a₀, b₀)`. Prove it with
+  `Aeneas.Std.loop.spec_decr_nat`, whose exact statement is
+
+  ```lean
+  theorem loop.spec_decr_nat {α β : Type _} (measure : α → Nat) (inv : α → Prop) (post : β → Prop)
+    (body : α → Result (ControlFlow α β)) (x : α)
+    (hBody : ∀ x, inv x → body x ⦃ r => match r with
+                                     | .done y => post y
+                                     | .cont x' => inv x' ∧ measure x' < measure x ⦄)
+    (hInv : inv x) : loop body x ⦃ post ⦄
+  ```
+
+  Verified skeleton (this exact shape checks; adapt the invariant and postcondition):
+
+  ```lean
+    unfold f_loop
+    apply loop.spec_decr_nat
+      (measure := fun p => p.1.«end».val - p.1.start.val)
+      (inv := fun p => p.1.«end» = iter.«end» ∧ <what holds of the accumulator p.2>)
+      (post := fun res => <the theorem's postcondition on res>)
+    · rintro ⟨it, acc⟩ ⟨hend, hacc⟩
+      simp only at hend hacc
+      step as ⟨res, hc, hd⟩                -- the body's specification, its two conjuncts
+      rcases res with ⟨it', acc'⟩ | v
+      · obtain ⟨h1, h2, h3, h4⟩ := hc _ rfl  -- start < end, start' = start + 1, end' = end, acc' = …
+        simp only at h2 h3 h4 ⊢
+        refine ⟨⟨h3.trans hend, ?_⟩, ?_⟩
+        · <invariant preserved, from h4 and hacc>
+        · simp only [h2, h3]; scalar_tac     -- measure decreases
+      · obtain ⟨h1, h2⟩ := hd _ rfl
+        simp only at h1 h2 ⊢
+        <postcondition from h2, hacc, and end ≤ start>
+    · exact ⟨rfl, <invariant at the initial state>⟩
+  ```
+
+  The invariant must carry the range's fixed `«end»`, the bounds the body's preconditions need, and
+  the accumulator described in terms of the initial arguments. Bit-level facts about `|||`, `^^^`,
+  `&&&` on machine integers are not closed by `scalar_tac`/`omega`; keep such invariants simple.
+  The loop body's own specification is listed with the target and is used through `step`.
 - Arithmetic side conditions are usually closed by `scalar_tac`; `simp` / `omega` for the rest.
   After `step`, each result `x` comes with a hypothesis `x_post`; substitute or `simp only [x_post]`
   before `scalar_tac` so the bound on `x` is visible. Casts: `IScalar.cast`/`UScalar.hcast` have
