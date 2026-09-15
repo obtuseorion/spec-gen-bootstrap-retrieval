@@ -44,6 +44,27 @@ You prove Lean 4 specifications of functions that Aeneas produced from Rust.
     · exact ⟨rfl, <invariant at the initial state>⟩
   ```
 
+  Loop bodies (`_loop.body`): the first call is `core.iter.range.IteratorRange.next`, whose
+  postcondition is an `if start < end then o = some start ∧ … else o = none ∧ …`; split on that
+  condition before anything else. Verified skeleton for a body over a `Range Usize`:
+
+  ```lean
+    unfold f_loop.body
+    step as ⟨o, iter1, o_post1, o_post2⟩
+    by_cases hlt : iter.start.val < iter.«end».val
+    · rw [if_pos hlt] at o_post1
+      obtain ⟨hio, hst⟩ := o_post1
+      simp only [hio]
+      have hb1 : iter.start.val < lhs.val.length := by scalar_tac   -- one per indexed sequence
+      step*
+      simp_all <;> scalar_tac
+    · rw [if_neg hlt] at o_post1
+      obtain ⟨hio, hst⟩ := o_post1
+      simp only [hio]
+      step*
+      simp_all <;> scalar_tac
+  ```
+
   The invariant must carry the range's fixed `«end»`, the bounds the body's preconditions need, and
   the accumulator described in terms of the initial arguments. Bit-level facts about `|||`, `^^^`,
   `&&&` on machine integers are not closed by `scalar_tac`/`omega`; keep such invariants simple.
