@@ -19,7 +19,7 @@ lean = "leanprover/lean4:v4.31.0"
 
 [budgets]
 spec_attempts = 5
-proof_attempts = 5
+proof_attempts = 10
 pbt_runs = 200
 max_mutants = 200
 eval_timeout_s = 10
