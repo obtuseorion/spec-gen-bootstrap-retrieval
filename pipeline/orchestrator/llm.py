@@ -11,6 +11,7 @@ response has zero or several blocks — both are rejected and counted as an atte
 
 from __future__ import annotations
 
+import random
 import re
 import time
 from dataclasses import dataclass, field
@@ -59,6 +60,29 @@ class AnthropicLLM:
         self._client = anthropic.Anthropic(max_retries=4)
 
     def _call(self, prompt: str, max_tokens: int, effort: str) -> Any:
+        """One request with retries for transient transport/capacity failures (mid-stream
+        disconnects are not covered by the SDK's own retry)."""
+        import anthropic
+
+        delay = 5.0
+        for attempt in range(6):
+            try:
+                return self._call_once(prompt, max_tokens, effort)
+            except (anthropic.APIConnectionError, anthropic.RateLimitError, anthropic.InternalServerError) as e:
+                last = e
+            except anthropic.APIStatusError as e:
+                if e.status_code < 500:
+                    raise
+                last = e
+            except Exception as e:  # httpx2.RemoteProtocolError and friends surface as plain exceptions mid-stream
+                if "RemoteProtocolError" not in type(e).__name__ and "incomplete" not in str(e) and "peer closed" not in str(e):
+                    raise
+                last = e
+            time.sleep(delay + random.uniform(0, 2))
+            delay = min(delay * 2, 120)
+        raise last
+
+    def _call_once(self, prompt: str, max_tokens: int, effort: str) -> Any:
         kwargs: dict[str, Any] = dict(
             model=self.model,
             max_tokens=max_tokens,

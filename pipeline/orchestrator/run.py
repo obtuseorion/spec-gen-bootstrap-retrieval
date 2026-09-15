@@ -117,7 +117,12 @@ class Pipeline:
             self.llm.context = {"unit": unit.id, "stage": stage, "member": member, "attempt": str(attempt)}
         t0 = time.monotonic()
         effort = self._effort(stage, attempt)
-        text, usage = self.llm.complete(prompt, max_tokens, effort=effort)
+        try:
+            text, usage = self.llm.complete(prompt, max_tokens, effort=effort)
+        except Exception as e:  # unrecoverable transport failure: counts as an attempt, never aborts the run
+            from orchestrator.llm import Usage
+            text, usage = "", Usage()
+            self.log.emit("llm_error", unit=unit.id, stage=stage, member=member, attempt=attempt, error=repr(e)[:500])
         block = extract_lean_block(text)
         info = {"unit": unit.id, "stage": stage, "member": member, "attempt": attempt, "prompt_tokens_approx": approx_tokens(prompt),
                 "usage": usage.to_json(), "elapsed_s": round(time.monotonic() - t0, 3), "block_ok": block is not None,
