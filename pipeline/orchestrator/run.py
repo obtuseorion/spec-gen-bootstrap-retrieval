@@ -106,14 +106,22 @@ class Pipeline:
         out = self.tools.embedtext(unit_id, list(u.all_members))
         return out.get("text") or u.source
 
+    def _effort(self, stage: str, attempt: int) -> str | None:
+        sched = self.config.llm.get(f"effort_schedule_{stage}")
+        if not sched:
+            return None
+        return str(sched[min(attempt, len(sched)) - 1])
+
     def _llm(self, prompt: str, max_tokens: int, unit: Unit, stage: str, member: str, attempt: int) -> tuple[str | None, dict[str, Any]]:
         if isinstance(self.llm, FakeLLM):
             self.llm.context = {"unit": unit.id, "stage": stage, "member": member, "attempt": str(attempt)}
         t0 = time.monotonic()
-        text, usage = self.llm.complete(prompt, max_tokens)
+        effort = self._effort(stage, attempt)
+        text, usage = self.llm.complete(prompt, max_tokens, effort=effort)
         block = extract_lean_block(text)
         info = {"unit": unit.id, "stage": stage, "member": member, "attempt": attempt, "prompt_tokens_approx": approx_tokens(prompt),
-                "usage": usage.to_json(), "elapsed_s": round(time.monotonic() - t0, 3), "block_ok": block is not None}
+                "usage": usage.to_json(), "elapsed_s": round(time.monotonic() - t0, 3), "block_ok": block is not None,
+                "effort": effort}
         self.log.emit("llm_call", **info)
         (self.work / unit.id / f"{stage}.{member}.{attempt}.prompt.md").parent.mkdir(parents=True, exist_ok=True)
         (self.work / unit.id / f"{stage}.{member}.{attempt}.prompt.md").write_text(prompt)
@@ -253,11 +261,19 @@ class Pipeline:
         proof_budget = int(budgets["proof_attempts"]) * len(members)
         regenerated: set[str] = set()
         last_pc: ProofOutcome | None = None
+        last_blame: str | None = None
         i = 0
         feedback = ""
         while i < len(members):
             member = members[i]
             if proof_budget <= 0:
+                # blame is advisory (step annotates every callee in the goal): a unit is "blocked by a
+                # callee" only when its last failing attempt was attributed to one
+                if last_blame is not None:
+                    self._failure(unit, "proof_blocked_by_callee", order_index, attempts, tokens, blame=last_blame,
+                                  last_error=(last_pc.result.get("error") if last_pc else None), member=member,
+                                  elapsed_s=round(time.monotonic() - t_unit, 1))
+                    return "proof_blocked_by_callee"
                 self._failure(unit, "proof_failed", order_index, attempts, tokens, last_error="proof budget exhausted",
                               member=member, elapsed_s=round(time.monotonic() - t_unit, 1))
                 return "proof_failed"
@@ -280,13 +296,12 @@ class Pipeline:
             if pc.accepted:
                 member_proofs[member] = block
                 last_pc = pc
+                last_blame = None
                 feedback = ""
                 i += 1
                 continue
-            if pc.blame_unit is not None:
-                self._failure(unit, "proof_blocked_by_callee", order_index, attempts, tokens, blame=pc.blame_unit,
-                              last_error=pc.result.get("error"), member=member, elapsed_s=round(time.monotonic() - t_unit, 1))
-                return "proof_blocked_by_callee"
+            last_pc = pc
+            last_blame = pc.blame_unit
             if pc.intra_unit_member and pc.intra_unit_member not in regenerated and pc.intra_unit_member in members[:i]:
                 # intra-unit failure: regenerate the helper's spec with this goal as feedback, re-gate, redo its proof
                 helper = pc.intra_unit_member
@@ -308,7 +323,7 @@ class Pipeline:
                 continue
             feedback = self.renderer.proof_feedback(pc.result)
 
-        assert last_pc is not None
+        assert last_pc is not None and last_pc.accepted
         status = "proved_modular" if last_pc.modular else "proved"
         gs = gate_summary
         rec = Record(

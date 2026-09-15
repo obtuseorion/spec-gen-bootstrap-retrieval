@@ -41,7 +41,7 @@ def extract_lean_block(text: str) -> str | None:
 class LLM(Protocol):
     name: str
 
-    def complete(self, prompt: str, max_tokens: int) -> tuple[str, Usage]: ...
+    def complete(self, prompt: str, max_tokens: int, effort: str | None = None) -> tuple[str, Usage]: ...
 
 
 @dataclass
@@ -78,12 +78,13 @@ class AnthropicLLM:
             with self._client.messages.stream(**kwargs) as stream:
                 return stream.get_final_message()
 
-    def complete(self, prompt: str, max_tokens: int) -> tuple[str, Usage]:
+    def complete(self, prompt: str, max_tokens: int, effort: str | None = None) -> tuple[str, Usage]:
         t0 = time.monotonic()
-        message = self._call(prompt, max_tokens, self.effort)
+        effort = effort or self.effort
+        message = self._call(prompt, max_tokens, effort)
         usage = Usage(input_tokens=message.usage.input_tokens, output_tokens=message.usage.output_tokens, calls=1)
         text = "".join(block.text for block in message.content if block.type == "text")
-        if not text.strip() and message.stop_reason == "max_tokens" and self.retry_effort != self.effort:
+        if not text.strip() and message.stop_reason == "max_tokens" and self.retry_effort != effort:
             # thinking consumed the whole budget: one retry at lower effort
             message = self._call(prompt, max_tokens, self.retry_effort)
             usage.input_tokens += message.usage.input_tokens
@@ -108,7 +109,7 @@ class FakeLLM:
     context: dict[str, str] = field(default_factory=dict)
     calls: int = 0
 
-    def complete(self, prompt: str, max_tokens: int) -> tuple[str, Usage]:
+    def complete(self, prompt: str, max_tokens: int, effort: str | None = None) -> tuple[str, Usage]:
         self.calls += 1
         unit, stage, member = self.context.get("unit", ""), self.context.get("stage", ""), self.context.get("member", "")
         attempt = int(self.context.get("attempt", "1"))

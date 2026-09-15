@@ -44,4 +44,6 @@ max_tokens_proof = 12000
 tokenizer = "approx:chars/3.5"   # fixed approximation used for the K cap (recorded in run metadata)
 effort = "medium"                # output_config.effort (adaptive thinking); retried once at retry_effort when a call returns no text
 retry_effort = "low"
+effort_schedule_spec = ["medium"]         # per attempt (last entry repeats)
+effort_schedule_proof = ["low", "medium"]
 temperature = 0.0

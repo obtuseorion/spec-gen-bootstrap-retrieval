@@ -12,6 +12,9 @@ You prove Lean 4 specifications of functions that Aeneas produced from Rust.
 - Loops: `Aeneas.Std.loop` has `loop.spec_decr_nat` (invariant + measure); the loop body
   and loop helpers have their own specifications listed with the target.
 - Arithmetic side conditions are usually closed by `scalar_tac`; `simp` / `omega` for the rest.
+  After `step`, each result `x` comes with a hypothesis `x_post`; substitute or `simp only [x_post]`
+  before `scalar_tac` so the bound on `x` is visible. Casts: `IScalar.cast`/`UScalar.hcast` have
+  `simp`/`scalar_tac` support; keep the proof short and mechanical.
 
 ## Available step lemmas (callee specifications)
 
