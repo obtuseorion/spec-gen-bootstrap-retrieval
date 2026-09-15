@@ -72,4 +72,33 @@ instance decForallSome {T : Type} (o : Option T) (P : T → Prop) [DecidablePred
   | some t => decidable_of_iff (P t) (by simp)
   | none => isTrue (by simp)
 
+/-! Loop bodies return `ControlFlow` (`cont` / `done`), which Aeneas derives only `BEq` for. -/
+
+instance decEqControlFlow {α β : Type} [DecidableEq α] [DecidableEq β] : DecidableEq (ControlFlow α β) :=
+  fun a b =>
+    match a, b with
+    | .cont x, .cont y => decidable_of_iff (x = y) (by simp)
+    | .done x, .done y => decidable_of_iff (x = y) (by simp)
+    | .cont _, .done _ | .done _, .cont _ => isFalse (by simp)
+
+instance decForallCont {α β : Type} (r : ControlFlow α β) (P : α → Prop) [DecidablePred P] :
+    Decidable (∀ v, r = ControlFlow.cont v → P v) :=
+  match r with
+  | .cont v => decidable_of_iff (P v) (by simp)
+  | .done _ => isTrue (by simp)
+
+instance decForallDone {α β : Type} (r : ControlFlow α β) (Q : β → Prop) [DecidablePred Q] :
+    Decidable (∀ v, r = ControlFlow.done v → Q v) :=
+  match r with
+  | .cont _ => isTrue (by simp)
+  | .done v => decidable_of_iff (Q v) (by simp)
+
+/-- `⦃ r => ∀ a b, r = .cont (a, b) → … ⦄`: the pair pattern the loop bodies use. -/
+instance decForallCont2 {α β γ : Type} (r : ControlFlow (α × β) γ) (P : α → β → Prop)
+    [∀ a b, Decidable (P a b)] :
+    Decidable (∀ a b, r = ControlFlow.cont (a, b) → P a b) :=
+  match r with
+  | .cont (a, b) => decidable_of_iff (P a b) (by simp)
+  | .done _ => isTrue (by simp)
+
 end LeanTools

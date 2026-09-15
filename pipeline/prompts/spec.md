@@ -32,6 +32,10 @@ Rules:
   the last one is the back function for `&mut` borrows).
 - Results of type `core.result.Result T E` or `Option T`: do not `match` (not testable);
   write `(∀ t, r = .Ok t → P t) ∧ (∀ e, r = .Err e → Q e)` (resp. `∀ t, r = some t → P t`).
+- Loop bodies (`_loop.body`) return `ControlFlow (<state>) (<result>)`: do not `match`; write
+  `(∀ v, r = .cont v → P v) ∧ (∀ v, r = .done v → Q v)` (or `∀ a b, r = .cont (a, b) → …` for a
+  pair state), with `v.1`/`v.2` projections. Their preconditions bound the iteration index by the
+  array length (e.g. `iter.«end».val ≤ 16`).
 - Names are relative to `namespace {{namespace}}` (write `demo.incr`, not `{{namespace}}.demo.incr`);
   the file is elaborated with `open Aeneas Aeneas.Std Result`.
 

@@ -136,6 +136,28 @@ def genListBounded {α : Type} [Arbitrary α] (bound : Nat := 16) : Gen { l : Li
   let ⟨l, h⟩ ← genListExact (α := α) k.val
   pure ⟨l, by rw [h]; exact k.property.2⟩
 
+/-- Largest slice / vector length the generators draw. -/
+def maxSeqLen : Nat := 2048
+
+/-- Length of a slice or vector: short (`≤ 16`, 40%), medium (`17..64`, 20%), one of the sizes
+fixed-size buffers commonly have (`32, 48, 64, …, 2048`, 30%), otherwise uniform up to
+`maxSeqLen` (10%). Preconditions such as `32 ≤ s.length` or `s.length = 64` then hold on a
+testable fraction of the draws (two slices both `≥ 32`: about 0.29). -/
+def genSeqLen : Gen { k : Nat // k ≤ maxSeqLen } := do
+  let sizes : Array Nat := #[32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048]
+  let k ← chooseNat 0 9 (Nat.zero_le _)
+  let v ← if k < 4 then chooseNat 0 16 (Nat.zero_le _)
+    else if k < 6 then chooseNat 17 64 (by decide)
+    else if k < 9 then do let i ← chooseNat 0 (sizes.size - 1) (Nat.zero_le _); pure sizes[i]!
+    else chooseNat 0 maxSeqLen (Nat.zero_le _)
+  pure ⟨min v maxSeqLen, Nat.min_le_right _ _⟩
+
+/-- A list whose length follows `genSeqLen`. -/
+def genListSeq {α : Type} [Arbitrary α] : Gen { l : List α // l.length ≤ maxSeqLen } := do
+  let k ← genSeqLen
+  let ⟨l, h⟩ ← genListExact (α := α) k.val
+  pure ⟨l, by rw [h]; exact k.property⟩
+
 /-- Run `g` in "small mode" (size 0) half of the time: all elements of one sequence are
 then small, so conjunctive bounds over every element hold often enough to be tested. -/
 def withSeqMode {α : Type} (g : Gen α) : Gen α := do
@@ -146,16 +168,25 @@ instance instArbitraryAeneasArray {α : Type} [Arbitrary α] {n : Usize} : Arbit
   ⟨withSeqMode (do let ⟨l, h⟩ ← genListExact (α := α) n.val; pure ⟨l, h⟩)⟩
 
 theorem sixteen_le_usize_max : 16 ≤ Usize.max := by scalar_tac
+theorem maxSeqLen_le_usize_max : maxSeqLen ≤ Usize.max := by simp [maxSeqLen]; scalar_tac
 
 instance instArbitrarySlice {α : Type} [Arbitrary α] : Arbitrary (Slice α) :=
   ⟨withSeqMode (do
-      let ⟨l, h⟩ ← genListBounded (α := α) 16
-      pure ⟨l, by have := sixteen_le_usize_max; omega⟩)⟩
+      let ⟨l, h⟩ ← genListSeq (α := α)
+      pure ⟨l, by have := maxSeqLen_le_usize_max; omega⟩)⟩
 
 instance instArbitraryVec {α : Type} [Arbitrary α] : Arbitrary (alloc.vec.Vec α) :=
   ⟨withSeqMode (do
-      let ⟨l, h⟩ ← genListBounded (α := α) 16
-      pure ⟨l, by have := sixteen_le_usize_max; omega⟩)⟩
+      let ⟨l, h⟩ ← genListSeq (α := α)
+      pure ⟨l, by have := maxSeqLen_le_usize_max; omega⟩)⟩
+
+/-- Iteration ranges: a small start and a small, non-negative extent, so that
+`start ≤ end ≤ <sequence length>` holds on a testable fraction of the draws. Declared with high
+priority because the gate also derives a (uniform) instance for this structure. -/
+instance (priority := high) instArbitraryRangeUsize : Arbitrary (core.ops.range.Range Usize) :=
+  ⟨do let s ← chooseNat 0 16 (Nat.zero_le _)
+      let d ← chooseNat 0 16 (Nat.zero_le _)
+      pure { start := ⟨BitVec.ofNat _ s⟩, «end» := ⟨BitVec.ofNat _ (s + d)⟩ }⟩
 
 /-- Shrink one element at a time; the length is fixed by the type. -/
 def shrinkListSameLength {α : Type u} [Shrinkable α] (l : List α) : List (List α) :=
