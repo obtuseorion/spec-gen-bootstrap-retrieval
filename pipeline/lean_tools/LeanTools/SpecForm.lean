@@ -1,6 +1,7 @@
 import LeanTools.Common
 import LeanTools.Frontend
 import LeanTools.Instances
+import LeanTools.Gate
 /-!
 # `leantools specform` — shape, vocabulary and decidability of a spec (Task 2)
 
@@ -76,6 +77,22 @@ def run (p : Project) (unit : Name) (members? : Option (Array Name)) (specFile :
   let members := members?.getD (loopFamily env mods unit)
   let text ← IO.FS.readFile specFile
   let full := specHeader p.ns ++ text
+  -- decidability needs the same derived instances the gate builds (DecidableEq of crate structures)
+  let r0 ← elabCommands env full specFile.toString
+  let env ← if r0.errors.isEmpty then do
+      let thmNames0 := r0.added.filter fun n => match r0.env.find? n with
+        | some (.thmInfo _) => true
+        | _ => false
+      let (types, _, _) ← runMeta r0.env do
+        let mut acc : Std.HashSet Name := {}
+        for n in thmNames0 do
+          if let some ci := r0.env.find? n then acc := Gate.crateTypesOf env mods ci.type acc
+        for m in members do
+          if let some ci := env.find? m then acc := Gate.crateTypesOf env mods ci.type acc
+        return acc
+      let (e', _) ← Gate.deriveInstances env (Mutate.mutantHeader p.ns) types #["DecidableEq"]
+      pure e'
+    else pure env
   let r ← elabCommands env full specFile.toString
   let mut res : Result := {}
   if !r.errors.isEmpty then

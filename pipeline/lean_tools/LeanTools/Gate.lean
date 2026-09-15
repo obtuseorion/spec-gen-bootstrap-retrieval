@@ -58,7 +58,9 @@ def binderGroups (env : Environment) (thmType : Expr) (bindersStx : Syntax) : IO
             | some c => c == `Aeneas.Std.Usize || c == `Aeneas.Std.UScalar
             | none => false
           if isUsize then
-            let mut used := false
+            -- a length parameter: implicit (`{SIZE : Usize}`, a const generic) or mentioned by a
+            -- later binder's type; sampled small so arrays stay small
+            let mut used := d.binderInfo != .default
             for j in [i+1:xs.size] do
               let dj ← xs[j]!.fvarId!.getDecl
               if (← instantiateMVars dj.type).containsFVar xs[i].fvarId! then used := true
@@ -116,7 +118,8 @@ def fallbackInstance (env : Environment) (t : Name) (cls : String) : MetaM (Opti
     let mut args := ""
     for p in params do
       let d ← p.fvarId!.getDecl
-      let ty ← ppExpr (← instantiateMVars d.type)
+      let dty ← instantiateMVars d.type
+      let ty ← if dty.isSort then pure (Std.Format.text "Type") else ppExpr dty
       binders := binders ++ s!" \{{d.userName} : {ty}}"
       args := args ++ s!" {d.userName}"
       if (← instantiateMVars d.type).isSort then
@@ -125,14 +128,16 @@ def fallbackInstance (env : Environment) (t : Name) (cls : String) : MetaM (Opti
           | "Repr" => "Repr" | _ => "DecidableEq"
         instBinders := instBinders ++ s!" [{c} {d.userName}]"
     let target := s!"({t}{args})"
-    let fs := fields.map (·.toString)
+    -- field names may be keywords (`end`): quote accessors, use positional names for binders
+    let fs := fields.map fun f => s!"«{f}»"
+    let vs := (List.range fs.size).map fun i => s!"v{i}"
     let body ← match cls with
       | "Arbitrary" =>
-        let lets := String.join (fs.map fun f => s!"let {f} ← Plausible.Arbitrary.arbitrary; ").toList
-        pure s!"⟨do {lets}pure ⟨{String.intercalate ", " fs.toList}⟩⟩"
+        let lets := String.join (vs.map fun v => s!"let {v} ← Plausible.Arbitrary.arbitrary; ")
+        pure s!"⟨do {lets}pure ⟨{String.intercalate ", " vs}⟩⟩"
       | "Shrinkable" => pure "⟨fun _ => []⟩"
       | "Repr" =>
-        let parts := fs.map fun f => s!"\"{f} := \" ++ reprStr x.{f}"
+        let parts := fields.map fun f => s!"\"{f} := \" ++ reprStr x.«{f}»"
         pure s!"⟨fun x _ => Std.Format.text (\"\{ \" ++ {String.intercalate " ++ \", \" ++ " parts.toList} ++ \" }\")⟩"
       | _ =>
         let eqs := String.intercalate " ∧ " (fs.map fun f => s!"a.{f} = b.{f}").toList
@@ -152,6 +157,45 @@ def elab1 (env : Environment) (header : String) (snippet : String) (tag : String
   let r ← elabCommands env (header ++ snippet) tag
   if r.errors.isEmpty then return { env := r.env, ok := true, error := "" }
   return { env, ok := false, error := String.intercalate "\n" r.errors.toList }
+
+/-- `deriving instance <cls> for <t>` for every type and class (each elaborated separately,
+retried a few passes for dependency order), then hand-built fallbacks for what remains.
+Returns the extended environment and notes about what could not be derived. -/
+def deriveInstances (env : Environment) (header : String) (types : Std.HashSet Name) (classes : Array String) :
+    IO (Environment × Array String) := do
+  let mut e := env
+  let mut notes : Array String := #[]
+  let typeList := types.toArray.qsort Name.lt
+  let mut pending := typeList.toList.flatMap fun t => classes.toList.map fun cls => (t, cls)
+  for _ in [0:4] do
+    let mut next := []
+    for (t, cls) in pending do
+      let r1 ← elab1 e header s!"deriving instance {cls} for {t}\n" s!"<derive {cls} {t}>"
+      if r1.ok then e := r1.env else next := (t, cls) :: next
+    pending := next.reverse
+    if pending.isEmpty then break
+  -- fallbacks, iterated so that a structure whose fields are other structures comes after them
+  let mut still := pending
+  let mut lastErr : Std.HashMap String String := {}
+  for _ in [0:4] do
+    let mut next := []
+    for (t, cls) in still do
+      let (txt?, _, _) ← runMeta e (fallbackInstance e t cls)
+      match txt? with
+      | some txt =>
+        let r1 ← elab1 e header txt s!"<fallback {cls} {t}>"
+        if r1.ok then e := r1.env
+        else
+          next := (t, cls) :: next
+          lastErr := lastErr.insert s!"{cls} {t}" (txt ++ "\n" ++ (r1.error.splitOn "\n")[0]!)
+      | none =>
+        next := (t, cls) :: next
+        lastErr := lastErr.insert s!"{cls} {t}" "not a structure"
+    still := next.reverse
+    if still.isEmpty then break
+  for (t, cls) in still do
+    notes := notes.push s!"could not derive {cls} for {t}: {lastErr.getD s!"{cls} {t}" ""}"
+  return (e, notes)
 
 def run (p : Project) (unit : Name) (members? : Option (Array Name)) (specFile : System.FilePath)
     (runs maxMutants timeoutS seed chunk : Nat) : IO Json := do
@@ -202,26 +246,9 @@ def run (p : Project) (unit : Name) (members? : Option (Array Name)) (specFile :
     for m in members do
       if let some ci := env.find? m then acc := crateTypesOf env mods ci.type acc
     return acc
-  let typeList := types.toArray.qsort Name.lt
-  let mut pending := typeList.toList.flatMap fun t =>
-    ["Repr", "DecidableEq", "Arbitrary", "Shrinkable"].map fun cls => (t, cls)
-  for _ in [0:4] do
-    let mut next := []
-    for (t, cls) in pending do
-      let r1 ← elab1 e header s!"deriving instance {cls} for {t}\n" s!"<derive {cls} {t}>"
-      if r1.ok then e := r1.env else next := (t, cls) :: next
-    pending := next.reverse
-    if pending.isEmpty then break
-  -- fallback instances for what could not be derived
-  let mut still := []
-  for (t, cls) in pending do
-    let (txt?, _, _) ← runMeta e (fallbackInstance e t cls)
-    match txt? with
-    | some txt =>
-      let r1 ← elab1 e header txt s!"<fallback {cls} {t}>"
-      if r1.ok then e := r1.env else still := (t, cls) :: still
-    | none => still := (t, cls) :: still
-  for (t, cls) in still.reverse do notes := notes.push s!"could not derive {cls} for {t}"
+  let (e', notes') ← deriveInstances e header types #["Repr", "DecidableEq", "Arbitrary", "Shrinkable"]
+  e := e'
+  notes := notes ++ notes'
   -- mutants
   let mut muts : Array Mutate.Mutant := #[]
   for m in mutRes.mutants do
