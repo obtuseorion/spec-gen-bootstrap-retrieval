@@ -130,10 +130,18 @@ class Pipeline:
         effort = self._effort(stage, attempt)
         try:
             text, usage = self.llm.complete(prompt, max_tokens, effort=effort)
-        except Exception as e:  # unrecoverable transport failure: counts as an attempt, never aborts the run
+        except Exception as e:
             from orchestrator.llm import Usage
+            msg = repr(e)
+            self.log.emit("llm_error", unit=unit.id, stage=stage, member=member, attempt=attempt, error=msg[:500])
+            # account-level failures (billing, auth) will fail every later call too: stop the run so no
+            # bogus failure records are written; resume once the account is fixed
+            status = getattr(e, "status_code", None)
+            if status in (401, 402, 403) or "credit balance" in msg or "authentication" in msg.lower():
+                self.log.emit("run_abort", reason="llm account error", error=msg[:500])
+                raise SystemExit(f"LLM account error, aborting run (resume after fixing it): {msg[:300]}")
+            # transient transport failure that outlived the retries: counts as an attempt
             text, usage = "", Usage()
-            self.log.emit("llm_error", unit=unit.id, stage=stage, member=member, attempt=attempt, error=repr(e)[:500])
         block = extract_lean_block(text)
         info = {"unit": unit.id, "stage": stage, "member": member, "attempt": attempt, "prompt_tokens_approx": approx_tokens(prompt),
                 "usage": usage.to_json(), "elapsed_s": round(time.monotonic() - t0, 3), "block_ok": block is not None,
