@@ -107,8 +107,14 @@ You prove Lean 4 specifications of functions that Aeneas produced from Rust.
   The loop body's own specification is listed with the target and is used through `step`.
 - Arithmetic side conditions are usually closed by `scalar_tac`; `simp` / `omega` for the rest.
   After `step`, each result `x` comes with a hypothesis `x_post`; substitute or `simp only [x_post]`
-  before `scalar_tac` so the bound on `x` is visible. Casts: `IScalar.cast`/`UScalar.hcast` have
-  `simp`/`scalar_tac` support; keep the proof short and mechanical.
+  before `scalar_tac` so the bound on `x` is visible. Keep the proof short and mechanical.
+- Casts and crate constants: a `step` through `as_i16`/`as_i32`-style casts leaves `x_post : x = IScalar.cast … y`
+  or `UScalar.hcast … y`; `subst_vars` then `simp only [IScalar.cast_val_eq, UScalar.hcast_val_eq] at *`
+  turns them into `Int.bmod y.val (2^n)`. Crate constants (`def C : I16 := 3329#i16`) unfold with
+  `simp only [C] at *` (then `simp at *` evaluates the literal). `scalar_tac`/`omega` know nothing about
+  `Int.bmod`: bound each `bmod` term first, e.g. `have := @Int.le_bmod t 65536 (by decide)` and
+  `have := @Int.bmod_le t 65536 (by decide)` (also `Int.bmod_lt`, `Int.bmod_eq_of_le` when the value
+  is already in range), then `omega`. `Int.fdiv a b = a / b` for `0 ≤ b` is `Int.fdiv_eq_ediv_of_nonneg`.
 
 ## Available step lemmas (callee specifications)
 
