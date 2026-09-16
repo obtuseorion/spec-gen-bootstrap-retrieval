@@ -114,7 +114,9 @@ You prove Lean 4 specifications of functions that Aeneas produced from Rust.
   `simp only [C] at *` (then `simp at *` evaluates the literal). `scalar_tac`/`omega` know nothing about
   `Int.bmod`: bound each `bmod` term first, e.g. `have := @Int.le_bmod t 65536 (by decide)` and
   `have := @Int.bmod_le t 65536 (by decide)` (also `Int.bmod_lt`, `Int.bmod_eq_of_le` when the value
-  is already in range), then `omega`. `Int.fdiv a b = a / b` for `0 ≤ b` is `Int.fdiv_eq_ediv_of_nonneg`.
+  is already in range), then `scalar_tac` (it knows `I32.min`/`I32.max`; `omega` does not).
+  `Int.fdiv a b = a / b` for `0 ≤ b` is `Int.fdiv_eq_ediv_of_nonneg`; a signed `x >>> n` yields
+  `x_post1 : ↑x = ↑y >>> ↑n` and `Int.shiftRight_eq_div_pow : m >>> n = m / 2 ^ n`.
 
 ## Available step lemmas (callee specifications)
 
