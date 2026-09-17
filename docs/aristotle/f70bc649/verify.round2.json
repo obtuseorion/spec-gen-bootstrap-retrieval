@@ -1,0 +1,54 @@
+{
+ "vector.portable.arithmetic.montgomery_reduce_element_spec": {
+  "kernel_ok": true,
+  "axioms_ok": true,
+  "static_ok": true,
+  "opaque_ok": true,
+  "axioms": [
+   "propext",
+   "Classical.choice",
+   "Quot.sound"
+  ],
+  "helpers": 0,
+  "error": ""
+ },
+ "vector.portable.serialize.serialize_10_int_spec": {
+  "kernel_ok": true,
+  "axioms_ok": true,
+  "static_ok": true,
+  "opaque_ok": true,
+  "axioms": [
+   "propext",
+   "Classical.choice",
+   "Quot.sound"
+  ],
+  "helpers": 7,
+  "error": ""
+ },
+ "vector.portable.serialize.deserialize_11_int_spec": {
+  "kernel_ok": true,
+  "axioms_ok": true,
+  "static_ok": true,
+  "opaque_ok": true,
+  "axioms": [
+   "propext",
+   "Classical.choice",
+   "Quot.sound"
+  ],
+  "helpers": 9,
+  "error": ""
+ },
+ "vector.portable.serialize.deserialize_5_int_spec": {
+  "kernel_ok": true,
+  "axioms_ok": true,
+  "static_ok": true,
+  "opaque_ok": true,
+  "axioms": [
+   "propext",
+   "Classical.choice",
+   "Quot.sound"
+  ],
+  "helpers": 4,
+  "error": ""
+ }
+}
