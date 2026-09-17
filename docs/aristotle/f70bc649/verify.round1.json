@@ -1,0 +1,42 @@
+{
+ "vector.portable.arithmetic.montgomery_reduce_element_spec": {
+  "kernel_ok": true,
+  "axioms_ok": true,
+  "static_ok": true,
+  "opaque_ok": true,
+  "axioms": [
+   "propext",
+   "Classical.choice",
+   "Quot.sound"
+  ],
+  "static_violations": [],
+  "error": ""
+ },
+ "vector.portable.serialize.serialize_10_int_spec": {
+  "kernel_ok": false,
+  "axioms_ok": false,
+  "static_ok": false,
+  "opaque_ok": null,
+  "axioms": [],
+  "static_violations": [],
+  "error": "<proof>:35:13-35:27: error(lean.unknownIdentifier): Unknown identifier `i16_to_u16_val`\n\n<proof>:19:55-45:39: error: unsolved goals\nv : Slice I16\nh : 4 \u2264 (\u2191v).length\ni : I16\n_\u271d\u00b2\u2078 : [> let i \u2190 v.index_usize 0#usize <]\ni_post : i = (\u2191v)[0]\ni1 : I16\n_\u271d\u00b2\u2077 : [> let i1 \u2190 lift (i &&& 255#i16) <]\ni1_post1 :"
+ },
+ "vector.portable.serialize.deserialize_11_int_spec": {
+  "kernel_ok": false,
+  "axioms_ok": false,
+  "static_ok": false,
+  "opaque_ok": null,
+  "axioms": [],
+  "static_violations": [],
+  "error": "<proof>:45:13-45:27: error(lean.unknownIdentifier): Unknown identifier `i16_to_u16_val`\n\n<proof>:24:70-71:51: error: unsolved goals\nbytes : Slice U8\nh : 11 \u2264 (\u2191bytes).length\ni : U8\n_\u271d\u2076\u00b9 : [> let i \u2190 bytes.index_usize 1#usize <]\ni_post : i = (\u2191bytes)[1]\ni1 : I16\n_\u271d\u2076\u2070 : [> let i1 \u2190 U8.Insts.Libcrux_se"
+ },
+ "vector.portable.serialize.deserialize_5_int_spec": {
+  "kernel_ok": false,
+  "axioms_ok": false,
+  "static_ok": false,
+  "opaque_ok": null,
+  "axioms": [],
+  "static_violations": [],
+  "error": "<proof>:44:33-44:49: error(lean.unknownIdentifier): Unknown identifier `u8_hcast_i16_val`\n\n<proof>:22:58-45:6: error: unsolved goals\nbytes : Slice U8\nh : 5 \u2264 (\u2191bytes).length\ni1 i3 i4 : U8\n_\u271d\u00b3\u00b3 : [> let i4 \u2190 i3 <<< 3#i32 <]\ni4_post1 : \u2191i4 = \u2191i3 <<< 3 % U8.size\ni4_post2 : i4.bv = i3.bv <<< 3\ni5 i6 : U"
+ }
+}
